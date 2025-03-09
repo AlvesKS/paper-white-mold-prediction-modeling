@@ -2,7 +2,7 @@
 title: "The repository"
 ---
 
-## **Safer and Smarter: Leveraging Transfer Learning and Data Fusion of Disease and Environmental Data for Modeling Plant Disease Risk**
+h3(**Safer and Smarter: Leveraging Transfer Learning and Data Fusion of Disease and Environmental Data for Modeling Plant Disease Risk**)
 
 **Kaique S. Alves^1,2^; Denis A. Shah^3^; Helene. R. Dillard^4^; Emerson M. Del Ponte^1^; Sarah J. Pethybridge^2\*^**
 
