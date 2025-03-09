@@ -1,0 +1,41 @@
+---
+title: Getting started
+subtitle: "Downloading data"
+author: "Kaique Alves"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+---
+
+## About
+
+To ensure you have all the data needed to reproduce our analysis, please download the datasets used in our study using the commands below. Each dataset is provided as a ZIP archive, so we recommend downloading them in binary mode to prevent file corruption.
+
+## Downloading the data 
+
+The code bellow downloads the zip files, unzips them and let you preview the contents of each of the files. Make sure to run all these comands before runing any of the scripts of this repository.
+
+### Disease data
+
+```{r echo=TRUE, eval=FALSE}
+download.file("https://osf.io/download/ehy26/", destfile = "data_white-mold.zip", mode = "wb")
+unzip("data_white-mold.zip", list = TRUE)
+```
+
+
+### Weather data
+```{r echo=TRUE, eval=FALSE}
+download.file("https://osf.io/download/k39bd/", destfile = "data_era5.zip", mode = "wb")
+unzip("data_era5.zip", list = TRUE)
+```
+
+### Soil data
+
+```{r echo=TRUE, eval=FALSE}
+download.file("https://osf.io/download/2jfcz/", destfile = "soil_images.zip", mode = "wb")
+unzip("soil_images.zip", list = TRUE)
+```
+
+## Session Info
+```{r}
+sessionInfo()
+```
+
