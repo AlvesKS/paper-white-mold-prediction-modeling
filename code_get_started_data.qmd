@@ -1,7 +1,7 @@
 ---
 title: Getting started
 subtitle: "Downloading data"
-author: "Kaique Alves"
+author: "Kaique Alves "
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 ---
 
