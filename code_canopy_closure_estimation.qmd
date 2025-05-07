@@ -638,3 +638,10 @@ x %>%
   labs(x = "Canopy gap at 35 dap (cm)") +
   theme_bw()
 ```
+
+
+## Session Info
+```{r}
+sessionInfo()
+```
+

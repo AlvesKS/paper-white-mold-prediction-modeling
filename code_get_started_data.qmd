@@ -17,21 +17,21 @@ The code bellow downloads the zip files, unzips them and let you preview the con
 
 ```{r echo=TRUE, eval=FALSE}
 download.file("https://osf.io/download/ehy26/", destfile = "data_white-mold.zip", mode = "wb")
-unzip("data_white-mold.zip", list = TRUE)
+unzip("data_white-mold.zip", list = FALSE)
 ```
 
 
 ### Weather data
 ```{r echo=TRUE, eval=FALSE}
 download.file("https://osf.io/download/k39bd/", destfile = "data_era5.zip", mode = "wb")
-unzip("data_era5.zip", list = TRUE)
+unzip("data_era5.zip", list = FALSE)
 ```
 
 ### Soil data
 
 ```{r echo=TRUE, eval=FALSE}
 download.file("https://osf.io/download/2jfcz/", destfile = "soil_images.zip", mode = "wb")
-unzip("soil_images.zip", list = TRUE)
+unzip("soil_images.zip", list = FALSE)
 ```
 
 ## Session Info

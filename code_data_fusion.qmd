@@ -1,12 +1,25 @@
 ---
-title: "Fuse the white mold datasets"
+title: "Merge the white mold datasets"
 subtitle: "Observational, agronomic, soils and weather variables"
 author: "Denis Shah"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 ---
 # OBJECTIVE
 
-Fuse the different sources of variables linked to the field observations: - the survey data (subject and wm response variable) - agronomic (drainage, hydrol, year, cd, harv.optim) - soils (ph, om, log_sand_clay, log_silt_clay) - canopy closure at 35 dap - total rain from planting to 35 dap (pre-bloom) - total rain from 36-50 dap (bloom through early pod fill) - vars identified from FDA: - t2m_mean: start = 0, end = 4 - sm: start = -4, end = 3 - sm: start = 5, end = 15 - sm: start = 17, end = 24 - sm: start = 40, end = 49 - stsm: start = 35, end = 44
+Merge the different sources of variables linked to the field observations:  
+- the survey data (subject and wm response variable)  
+- agronomic (drainage, hydrol, year, cd, harv.optim)  
+- soils (ph, om, log_sand_clay, log_silt_clay)  
+- canopy closure at 35 dap  
+- total rain from planting to 35 dap (pre-bloom)  
+- total rain from 36-50 dap (bloom through early pod fill)  
+- vars identified from FDA:  
+  - t2m_mean: start = 0, end = 4  
+  - sm: start = -4, end = 3  
+  - sm: start = 5, end = 15 
+  - sm: start = 17, end = 24  
+  - sm: start = 40, end = 49  
+  - stsm: start = 35, end = 44  
 
 ```{r setup, include=FALSE, eval=TRUE, warning=FALSE}
 options(digits = 3)
@@ -43,7 +56,7 @@ surv <-
   dplyr::select(subject, wm)
 ```
 
-# agronomic (drainage, hydrol, cd, harv.optim)
+# Agronomic (drainage, hydrol, cd, harv.optim)
 
 ```{r}
 agron <-
@@ -76,7 +89,7 @@ agron <-
   dplyr::distinct()
 ```
 
-# soils (ph, om, log_sand_clay, log_silt_clay)
+# Soils (ph, om, log_sand_clay, log_silt_clay)
 
 ```{r}
 soils <- 
@@ -93,7 +106,7 @@ soils <-
   dplyr::select(subject, ph, om, log_sand_clay, log_silt_clay)
 ```
 
-# canopy closure at 35 dap
+# Canopy closure at 35 dap
 
 ```{r}
 load(here::here("CanopyClosure", "cc.df.35dap.RData")) # cc.df.35dap

@@ -221,7 +221,7 @@ wm.curves <- function(x, .ylab = NULL, ...) {
       # Using a spline basis representation to smooth the means:
       dplyr::mutate(smooth_mean = tfb(var_mean)) %>%
       ggplot(aes(tf = smooth_mean, color = wm)) +
-      geom_spaghetti(linewidth = 1.25, alpha = 1) +
+      geom_spaghetti(linewidth = 2, alpha = 1) +
       scale_x_continuous(breaks = seq(-30, 70, by = 10)) +
       annotate("rect", ymin = -Inf, ymax = Inf, xmin = 35, xmax = 50,
                fill = "steelblue", alpha = 0.2) +
@@ -470,6 +470,7 @@ p1 + p2 + p3 + p4 + p5 + p6 + p7 + p8 +
   theme(legend.position='bottom',
         axis.title = element_text(size = 10))
 ggsave("figs/functional_curves.png", dpi = 600, height = 11, width =8, bg = "white")
+ggsave("figs/functional_curves.pdf", dpi = 600, height = 11, width =8, bg = "white")
 ```
 
 

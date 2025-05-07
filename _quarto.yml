@@ -30,11 +30,11 @@ project:
 # editor: visual
 
 website:
-  title: "Data & Codes"
+  title: "White mold prediction modeling"
   page-navigation: true
   #opengraph: true
   open-graph: true
-  repo-url: https://github.com/AlvesKS/paper-white-mold-transfer-learning
+  repo-url: https://github.com/AlvesKS/paper-white-mold-prediction-modeling
   repo-actions: [edit, issue]
   search: 
     location: navbar
@@ -65,9 +65,9 @@ website:
           
     tools:
       - icon: linkedin
-        href: https://twitter.com/AlvesKS_
+        href: https://www.linkedin.com/in/kaique-alves-ab253436/
       - icon: github
-        href: https://github.com/AlvesKS/paper_ML_whitemold
+        href: https://github.com/AlvesKS/paper-white-mold-prediction-modeling
       - icon: download
         href: https://osf.io/v53py/
   page-footer: "Copyright © 2024 Kaique S. Alves" 

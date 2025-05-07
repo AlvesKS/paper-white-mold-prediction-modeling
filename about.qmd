@@ -2,7 +2,7 @@
 title: "The repository"
 ---
 
-h3(**Safer and Smarter: Leveraging Transfer Learning and Data Fusion of Disease and Environmental Data for Modeling Plant Disease Risk**)
+h3(**Safer and Smarter: Leveraging Interpretation-Guided Modeling and Data Merging of Disease and Environmental Data for Plant Disease Risk Prediction**)
 
 **Kaique S. Alves^1,2^; Denis A. Shah^3^; Helene. R. Dillard^4^; Emerson M. Del Ponte^1^; Sarah J. Pethybridge^2\*^**
 
@@ -27,7 +27,7 @@ We developed a workflow for enhancing small observational datasets to model plan
 ::: {.callout-note appearance="simple"}
 # This [repository](https://osf.io/v53py/){target="_blank"} contains the data and code for our article:
 
-Alves, K.S., Shah, D.A., Dillard, H.R., Del Ponte, E.M., Pethybridge, S.J. (YYYY) Safer and Smarter: Leveraging Transfer Learning and Data Fusion of Disease and Environmental Data for Modeling Plant Disease Risk. Name of journal/book <https://doi.org/xxx/xxx>
+Alves, K.S., Shah, D.A., Dillard, H.R., Del Ponte, E.M., Pethybridge, S.J. (YYYY) Safer and Smarter: Leveraging Interpretation-Guided Modeling and Data Merging of Disease and Environmental Data for Plant Disease Risk Prediction. Name of journal/book <https://doi.org/xxx/xxx>
 :::
 
 ## Read the Preprint
@@ -35,7 +35,7 @@ Alves, K.S., Shah, D.A., Dillard, H.R., Del Ponte, E.M., Pethybridge, S.J. (YYYY
 ::: {.callout-note appearance="simple"}
 # Our pre-print is online on the OSF preprint server:
 
-Alves, K.S., Shah, D.A., Dillard, H.R., Del Ponte, E.M., Pethybridge, S.J. (YYYY) Safer and Smarter: Leveraging Transfer Learning and Data Fusion of Disease and Environmental Data for Modeling Plant Disease Risk. Online at <doi.org/10.31219/osf.io/9tgau>
+Alves, K.S., Shah, D.A., Dillard, H.R., Del Ponte, E.M., Pethybridge, S.J. (YYYY) Safer and Smarter: Leveraging Interpretation-Guided Modeling and Data Merging of Disease and Environmental Data for Plant Disease Risk Prediction. Online at <doi.org/10.31219/osf.io/9tgau>
 :::
 
 ## Research compendium
@@ -43,5 +43,5 @@ Alves, K.S., Shah, D.A., Dillard, H.R., Del Ponte, E.M., Pethybridge, S.J. (YYYY
 ::: {.callout-note appearance="simple"}
 ## Please cite this research compendium as:
 
-Alves, K. S., Shah, D. A., Dillard, H. R., Del Ponte, E. M., & Pethybridge, S. J. (2022, August 3). Research Compendium: Safer and Smarter: Leveraging Transfer Learning and Data Fusion of Disease and Environmental Data for Modeling Plant Disease Risk. https://doi.org/10.17605/OSF.IO/V53PY
+Alves, K. S., Shah, D. A., Dillard, H. R., Del Ponte, E. M., & Pethybridge, S. J. (2022, August 3). Safer and Smarter: Leveraging Interpretation-Guided Modeling and Data Merging of Disease and Environmental Data for Plant Disease Risk Prediction. https://doi.org/10.17605/OSF.IO/V53PY
 :::

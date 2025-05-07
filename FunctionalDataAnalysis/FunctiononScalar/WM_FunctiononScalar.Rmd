@@ -15,6 +15,8 @@ output:
       chunk_output_type: console
 ---
 
+<!-- Using R 4.4.1 -->
+
 ```{r setup, include=FALSE, eval=TRUE}
 options(digits = 3)
 require(knitr)
@@ -22,14 +24,16 @@ require(knitr)
 knitr::opts_chunk$set(eval = TRUE, echo = FALSE, cache = FALSE, warning = FALSE, message = FALSE)
 ```
 
+
 ```{r Libraries, echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
-library(fda)
-library(refund)
-library(fdatest)
-library(tidyverse)
-library(tictoc)
-library(kableExtra)
+library(fda)         # Ver. 6.2.0
+library(refund)      # Ver. 0.1-37
+library(fdatest)     # Ver. 2.1.1
+library(tidyverse)   # Ver. 2.0.0
+library(tictoc)      # Ver. 1.2.1
+library(kableExtra)  # Ver. 1.4.0
 ```
+
 
 ```{r Load-and-process-the-data}
 wm_load <- readr::read_csv(here::here("Data", "data_model_plus_weather_filtered.csv"), show_col_types = FALSE)
@@ -83,6 +87,7 @@ wm_data <-
   dplyr::mutate(wm = as.numeric(wm)-1) %>%
   dplyr::mutate(wm = 2*wm-1) 
 ```
+
 
 ```{r fos-functions}
 data.prep <- function(x) {
@@ -192,87 +197,88 @@ fANOVA <- function(dat) {
   }
 ```
 
+
 # Function-on-scalar regression {.tabset .tabset-fade .tabset-pills}
-
 ## Dew point
-
 ```{r function-on-scalar-d2m}
 fANOVA(dat = data.prep(d2m))
 ```
 
-## Mean air temperature
 
+## Mean air temperature
 ```{r function-on-scalar-t2m-mean}
 fANOVA(dat = data.prep(t2m_mean))
 ```
 
-## Max air temperature
 
+## Max air temperature
 ```{r function-on-scalar-t2m-max}
 fANOVA(dat = data.prep(t2m_max))
 ```
 
-## Min air temperature
 
+## Min air temperature
 ```{r function-on-scalar-t2m-min}
 fANOVA(dat = data.prep(t2m_min))
 ```
 
-## Max - Min air temperature
 
+## Max - Min air temperature
 ```{r function-on-scalar-tdiff}
 fANOVA(dat = data.prep(tdiff))
 ```
 
-## Temperature-Dewpoint depression
 
+## Temperature-Dewpoint depression
 ```{r function-on-scalar-dpd}
 fANOVA(dat = data.prep(dpd))
 ```
 
-## Soil temperature
 
+## Soil temperature
 ```{r function-on-scalar-st}
 fANOVA(dat = data.prep(st))
 ```
 
-## Soil moisture
 
+## Soil moisture
 ```{r function-on-scalar-sm}
 fANOVA(dat = data.prep(sm))
 ```
 
-## soil temperature:soil moisture ratio
 
+## soil temperature:soil moisture ratio
 ```{r function-on-scalar-stsm}
 fANOVA(dat = data.prep(stsm))
 ```
 
-## Surface pressure
 
+## Surface pressure
 ```{r function-on-scalar-sp}
 fANOVA(dat = data.prep(sp))
 ```
 
-## Relative humidity
 
+## Relative humidity
 ```{r function-on-scalar-rh}
 fANOVA(dat = data.prep(rh))
 ```
 
-## VPD
 
+## VPD
 ```{r function-on-scalar-vpd}
 fANOVA(dat = data.prep(vpd))
 ```
 
-## Growing degree days
 
+## Growing degree days
 ```{r function-on-scalar-gdd}
 fANOVA(dat = data.prep(gdd))
 ```
 
-------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------
+
 
 <!-- NEW SECTION: interval-wide tests -->
 
@@ -325,6 +331,7 @@ seq(-30, 50)[31:32]
 # Take the above code, and wrap into functions to (i) prep the data for input into fdatest, (ii) calling the fdatest functions to estimate the adjusted p values
 ```
 
+
 ```{r fdatest-functions}
 make_kable <- function(...) {
   # kable and kableExtra styling to avoid repetitively calling the styling over and over again
@@ -334,11 +341,12 @@ make_kable <- function(...) {
     kable_styling(bootstrap_options = c("striped"), position = "left", font_size = 11, full_width = FALSE) 
 }
 
-do.fdatest <- function(x) {
+do.fdatest <- function(x, alpha) {
   # Performs an Interval Testing Procedure for testing the difference between the two functional wm populations evaluated on a uniform grid
   #
   # Args:
   #  x = unquoted variable name, e.g. d2m
+  #  alpha = numeric giving the p valaue level for the test, e.g. 0.05
   #
   # Returns:
   #   a tibble of the variable with a list vector of the days (relative to sowing) where the two populations differ functionally
@@ -372,9 +380,9 @@ do.fdatest <- function(x) {
   # (set a seed for reproducibility)
   { sink(nullfile()); set.seed(86754309); foo <- ITP2bspline(dat$wm0, dat$wm1, B = 10000); sink() }
 
-  # Selecting the significant components at 5% level:
+  # Selecting the significant components at the specified alpha level:
   # Which corresponds to the following days (relative to sowing, where sowing is day = 0):
-  z <- seq(-30, 50)[which(foo$corrected.pval < 0.05)]
+  z <- seq(-30, 50)[which(foo$corrected.pval < alpha)]
   
   res <- tibble(var = rlang::as_name(.x), days = list(z))
   
@@ -382,7 +390,7 @@ do.fdatest <- function(x) {
 }
 
 # Example of use:
-# do.fdatest(x = d2m)
+# do.fdatest(x = d2m, alpha = 0.05)
 
 filter.iwt <- function(x) {
   # Filter the interval-wise testing results to see the days that were significant
@@ -442,138 +450,40 @@ zee <- function(series) {
 # Now we're ready to roll...
 ```
 
-<!-- Already did the interval-wise tests. Just load the results. -->
-
-```{r load-the-iwt-results}
-load(here::here("FunctionalDataAnalysis", "FunctiononScalar", "iwt.RData"))
-```
 
 # Interval-wise tests {.tabset .tabset-fade .tabset-pills}
-
 Perform the interval-wise tests
 
-```{r do-interval-wise-tests, eval=FALSE}
-tst.d2m <- do.fdatest(x = d2m)
+<!-- p = 0.05 -->
+```{r do-interval-wise-tests-p05, eval=FALSE}
+tst.d2m <- do.fdatest(x = d2m, alpha = 0.05)
 
-tst.t2m_mean <- do.fdatest(x = t2m_mean)
+tst.t2m_mean <- do.fdatest(x = t2m_mean, alpha = 0.05)
 
-tst.t2m_max <- do.fdatest(x = t2m_max)
+tst.t2m_max <- do.fdatest(x = t2m_max, alpha = 0.05)
 
-tst.t2m_min <- do.fdatest(x = t2m_min)
+tst.t2m_min <- do.fdatest(x = t2m_min, alpha = 0.05)
 
-tst.tdiff <- do.fdatest(x = tdiff)
+tst.tdiff <- do.fdatest(x = tdiff, alpha = 0.05)
 
-tst.dpd <- do.fdatest(x = dpd)
+tst.dpd <- do.fdatest(x = dpd, alpha = 0.05)
 
-tst.st <- do.fdatest(x = st)
+tst.st <- do.fdatest(x = st, alpha = 0.05)
 
-tst.sm <- do.fdatest(x = sm)
+tst.sm <- do.fdatest(x = sm, alpha = 0.05)
 
-tst.stsm <- do.fdatest(x = stsm)
+tst.stsm <- do.fdatest(x = stsm, alpha = 0.05)
 
-tst.sp <- do.fdatest(x = sp)
+tst.sp <- do.fdatest(x = sp, alpha = 0.05)
 
-tst.rh <- do.fdatest(x = rh)
+tst.rh <- do.fdatest(x = rh, alpha = 0.05)
 
-tst.vpd <- do.fdatest(x = vpd)
+tst.vpd <- do.fdatest(x = vpd, alpha = 0.05)
 
-tst.gdd <- do.fdatest(x = gdd)
-```
+tst.gdd <- do.fdatest(x = gdd, alpha = 0.05)
+```  
 
-I've already done the interval-wise tests, so the chunks in this section will just output the days that the test found to be significant.
-
-## Dew point
-
-```{r iwt-d2m}
-zee("d2m") %>% 
-  make_kable()
-```
-
-## Mean air temperature
-
-```{r iwt-t2m-mean}
-zee("t2m_mean") %>% 
-  make_kable()
-```
-
-## Max air temperature
-
-```{r iwt-t2m-max}
-zee("t2m_max") %>% 
-  make_kable()
-```
-
-## Min air temperature
-
-```{r iwt-t2m-min}
-zee("t2m_min") %>% 
-  make_kable()
-```
-
-## Max - Min air temperature
-
-```{r iwt-tdiff}
-zee("tdiff") %>% 
-  make_kable()
-```
-
-## Temperature-Dewpoint depression
-
-```{r iwt-dpd}
-zee("dpd") %>% 
-  make_kable()
-```
-
-## Soil temperature
-
-```{r iwt-st}
-zee("st") %>% 
-  make_kable()
-```
-
-## Soil moisture
-
-```{r iwt-sm}
-zee("sm") %>% 
-  make_kable()
-```
-
-## soil temperature:soil moisture ratio
-
-```{r iwt-stsm}
-zee("stsm") %>% 
-  make_kable()
-```
-
-## Surface pressure
-
-```{r iwt-sp}
-zee("sp") %>% 
-  make_kable()
-```
-
-## Relative humidity
-
-```{r iwt-rh}
-zee("rh") %>% 
-  make_kable()
-```
-
-## VPD
-
-```{r iwt-vpd}
-zee("vpd") %>% 
-  make_kable()
-```
-
-<!-- ## Growing degree days -->
-
-```{r iwt-gdd, eval=FALSE, echo=FALSE}
-zee("gdd") %>% 
-  make_kable()
-```
-
-```{r save-the-results, eval=FALSE}
+```{r save-the-results-p05, eval=FALSE}
 # I want to put all the data frames into a list (to pass to bind_rows). Found the solution at:
 # https://stackoverflow.com/questions/26738302/make-list-of-objects-in-global-environment-matching-certain-string-pattern
 # so don't have to write them out one-by-one
@@ -586,12 +496,168 @@ iwt.list <- do.call("list", mget(Pattern1))
 iwt <- dplyr::bind_rows(iwt.list)
 
 # Save iwt: 
-save(iwt.list, iwt, file = here::here("FunctionalDataAnalysis", "FunctiononScalar", "iwt.RData"))
+save(iwt.list, iwt, file = here::here("FunctionalDataAnalysis", "FunctiononScalar", "iwt05.RData"))
 ```
 
-# Summary of the test results
+<!-- p = 0.01 -->
+```{r do-interval-wise-tests-p01, eval=FALSE}
+tst.d2m <- do.fdatest(x = d2m, alpha = 0.01)
 
-```{r parsing-the-results, results='hide'}
+tst.t2m_mean <- do.fdatest(x = t2m_mean, alpha = 0.01)
+
+tst.t2m_max <- do.fdatest(x = t2m_max, alpha = 0.01)
+
+tst.t2m_min <- do.fdatest(x = t2m_min, alpha = 0.01)
+
+tst.tdiff <- do.fdatest(x = tdiff, alpha = 0.01)
+
+tst.dpd <- do.fdatest(x = dpd, alpha = 0.01)
+
+tst.st <- do.fdatest(x = st, alpha = 0.01)
+
+tst.sm <- do.fdatest(x = sm, alpha = 0.01)
+
+tst.stsm <- do.fdatest(x = stsm, alpha = 0.01)
+
+tst.sp <- do.fdatest(x = sp, alpha = 0.01)
+
+tst.rh <- do.fdatest(x = rh, alpha = 0.01)
+
+tst.vpd <- do.fdatest(x = vpd, alpha = 0.01)
+
+tst.gdd <- do.fdatest(x = gdd, alpha = 0.01)
+```  
+
+```{r save-the-results-p01, eval=FALSE}
+# I want to put all the data frames into a list (to pass to bind_rows). Found the solution at:
+# https://stackoverflow.com/questions/26738302/make-list-of-objects-in-global-environment-matching-certain-string-pattern
+# so don't have to write them out one-by-one
+Pattern1 <- grep("^tst.", names(.GlobalEnv), value = TRUE)
+iwt.list <- do.call("list", mget(Pattern1))
+# Don't need the tst. objects no more:
+# rm(list = Pattern1)
+
+# Now bind all the data frames into one:
+iwt <- dplyr::bind_rows(iwt.list)
+
+# Save iwt: 
+save(iwt.list, iwt, file = here::here("FunctionalDataAnalysis", "FunctiononScalar", "iwt01.RData"))
+```
+
+
+I've already done the interval-wise tests, so we'll just output the days that the test found to be significant. 
+
+<!-- Some setups for processing and plotting later... -->
+```{r iwt-some-setup}
+# Create a vector of all the series names:
+e <- c("t2m_mean", "t2m_max", "t2m_min", "tdiff", "d2m", "dpd", "sm", "st", "stsm", "sp", "rh", "vpd")
+
+# Assign variable labels:
+var_labels <- tribble(
+  ~variable,      ~variable_label, 
+  "d2m",       "Dewpoint (°C)",
+  "t2m_mean",  "Mean air temperature (°C)",
+  "t2m_max",   "Max. air temperature (°C)",
+  "t2m_min",   "Min. air temperature (°C)",
+  "tdiff",     "Max. - Min. air temperature (°C)",
+  "dpd",       "Dew point depression (°C)",
+  "st",        "Soil temperature (°C)",
+  "sm",        "Soil moisture (m³/m³)",
+  "stsm",      "Soil temperature:moisture ratio",
+  "sp",        "Surface pressure (kPa)",
+  "rh",        "Relative humidity (%)", 
+  "vpd",       "Vapor pressure deficit (kPa)"
+) %>% 
+  tibble::deframe()
+```
+
+
+## P < 0.05 {.tabset .tabset-fade .tabset-pills}
+
+<!-- Already did the interval-wise tests. Just load the results. -->
+```{r load-the-p05-iwt-results}
+load(here::here("FunctionalDataAnalysis", "FunctiononScalar", "iwt05.RData"))
+```
+
+### Dew point
+```{r iwt-d2m-p05}
+zee("d2m") %>% 
+  make_kable()
+```
+
+### Mean air temperature
+```{r iwt-t2m-mean-p05}
+zee("t2m_mean") %>% 
+  make_kable()
+```
+
+### Max air temperature
+```{r iwt-t2m-max-p05}
+zee("t2m_max") %>% 
+  make_kable()
+```
+
+### Min air temperature
+```{r iwt-t2m-min-p05}
+zee("t2m_min") %>% 
+  make_kable()
+```
+
+### Max - Min air temperature
+```{r iwt-tdiff-p05}
+zee("tdiff") %>% 
+  make_kable()
+```
+
+### Temperature-Dewpoint depression
+```{r iwt-dpd-p05}
+zee("dpd") %>% 
+  make_kable()
+```
+
+### Soil temperature
+```{r iwt-st-p05}
+zee("st") %>% 
+  make_kable()
+```
+
+### Soil moisture
+```{r iwt-sm-p05}
+zee("sm") %>% 
+  make_kable()
+```
+
+### soil temperature:soil moisture ratio
+```{r iwt-stsm-p05}
+zee("stsm") %>% 
+  make_kable()
+```
+
+### Surface pressure
+```{r iwt-sp-p05}
+zee("sp") %>% 
+  make_kable()
+```
+
+### Relative humidity
+```{r iwt-rh-p05}
+zee("rh") %>% 
+  make_kable()
+```
+
+### VPD
+```{r iwt-vpd-p05}
+zee("vpd") %>% 
+  make_kable()
+```
+
+<!-- ## Growing degree days -->
+```{r iwt-gdd-p05, eval=FALSE, echo=FALSE}
+zee("gdd") %>% 
+  make_kable()
+```
+
+```{r parsing-the-results-p05, results='hide'}
 # Let's use the filter.iwt function to have a look at the intervals that were significant (all series, ignoring gdd):
 # air temperature-related
 filter.iwt(x = "t2m_mean")
@@ -624,36 +690,115 @@ filter.iwt(x = "stsm") %>% split(., cumsum(c(1, diff(.) != 1)))
 # What we're ultimately interested in is parsing the significant dates into any continuous segments.
 # The find the start and end of these segments, so that we can input those to a dataframe for plotting. For that we use the function `zee` (see the functions chunk)
 
-# Create a vector of all the series names:
-e <- c("t2m_mean", "t2m_max", "t2m_min", "tdiff", "d2m", "dpd", "sm", "st", "stsm", "sp", "rh", "vpd")
-
-# May over e and bind the rows:
-g <- purrr::map(e, zee) |> list_rbind()
+# Map over e and bind the rows:
+g05 <- purrr::map(e, zee) |> list_rbind()
 ```
 
-```{r plot-the-results}
+
+
+
+## P < 0.01 {.tabset .tabset-fade .tabset-pills}
+
+<!-- Already did the interval-wise tests. Just load the results. -->
+```{r load-the-p01-iwt-results}
+load(here::here("FunctionalDataAnalysis", "FunctiononScalar", "iwt01.RData"))
+```
+
+### Dew point
+```{r iwt-d2m-p01}
+zee("d2m") %>% 
+  make_kable()
+```
+
+### Mean air temperature
+```{r iwt-t2m-mean-p01}
+zee("t2m_mean") %>% 
+  make_kable()
+```
+
+### Max air temperature
+```{r iwt-t2m-max-p01}
+zee("t2m_max") %>% 
+  make_kable()
+```
+
+### Min air temperature
+```{r iwt-t2m-min-p01}
+zee("t2m_min") %>% 
+  make_kable()
+```
+
+### Max - Min air temperature
+```{r iwt-tdiff-p01}
+zee("tdiff") %>% 
+  make_kable()
+```
+
+### Temperature-Dewpoint depression
+```{r iwt-dpd-p01}
+zee("dpd") %>% 
+  make_kable()
+```
+
+### Soil temperature
+```{r iwt-st-p01}
+zee("st") %>% 
+  make_kable()
+```
+
+### Soil moisture
+```{r iwt-sm-p01}
+zee("sm") %>% 
+  make_kable()
+```
+
+### soil temperature:soil moisture ratio
+```{r iwt-stsm-p01}
+zee("stsm") %>% 
+  make_kable()
+```
+
+### Surface pressure
+```{r iwt-sp-p01}
+zee("sp") %>% 
+  make_kable()
+```
+
+### Relative humidity
+```{r iwt-rh-p01}
+zee("rh") %>% 
+  make_kable()
+```
+
+### VPD
+```{r iwt-vpd-p01}
+zee("vpd") %>% 
+  make_kable()
+```
+
+<!-- ## Growing degree days -->
+```{r iwt-gdd-p01, eval=FALSE, echo=FALSE}
+zee("gdd") %>% 
+  make_kable()
+```
+
+```{r parsing-the-results-p01, results='hide'}
+# What we're ultimately interested in is parsing the significant dates into any continuous segments.
+# The find the start and end of these segments, so that we can input those to a dataframe for plotting. For that we use the function `zee` (see the functions chunk)
+
+# Map over e and bind the rows:
+g01 <- purrr::map(e, zee) |> list_rbind()
+```
+
+
+
+# Summary of the test results {.tabset .tabset-fade .tabset-pills}
+## P < 0.05
+```{r plot-the-results-p05}
 # Code for plotting the segments derived from here:
 # https://stackoverflow.com/questions/35322919/grouped-data-by-factor-with-geom-segment
 
-# Assign variable labels:
-var_labels <- tribble(
-  ~variable,      ~variable_label, 
-  "d2m",       "Dewpoint (°C)",
-  "t2m_mean",  "Mean air temperature (°C)",
-  "t2m_max",   "Max. air temperature (°C)",
-  "t2m_min",   "Min. air temperature (°C)",
-  "tdiff",     "Max. - Min. air temperature (°C)",
-  "dpd",       "Dew point depression (°C)",
-  "st",        "Soil temperature (°C)",
-  "sm",        "Soil moisture (m³/m³)",
-  "stsm",      "Soil temperature:moisture ratio",
-  "sp",        "Surface pressure (kPa)",
-  "rh",        "Relative humidity (%)", 
-  "vpd",       "Vapor pressure deficit (kPa)"
-) %>% 
-  tibble::deframe()
-
-g %>% 
+g05 %>% 
   ggplot(., aes(ymin = start, ymax = end, x = series)) + 
   # Changing the order on the x-axis for the categories:
   scale_x_discrete(limits = rev(c("t2m_mean", "t2m_max", "t2m_min", "tdiff", "d2m", "dpd", "sm", "st", "stsm", "sp", "rh", "vpd")), labels = var_labels, name = NULL) + 
@@ -668,8 +813,30 @@ g %>%
     theme(axis.title = element_text(face = "bold", size = 11))
 ```
 
-<!-- # Summary variables -->
+## P < 0.01
+```{r plot-the-results-p01}
+# Code for plotting the segments derived from here:
+# https://stackoverflow.com/questions/35322919/grouped-data-by-factor-with-geom-segment
 
+g01 %>% 
+  ggplot(., aes(ymin = start, ymax = end, x = series)) + 
+  # Changing the order on the x-axis for the categories:
+  scale_x_discrete(limits = rev(c("t2m_mean", "t2m_max", "t2m_min", "tdiff", "d2m", "dpd", "sm", "st", "stsm", "sp", "rh", "vpd")), labels = var_labels, name = NULL) + 
+  # Pay attention to layers. Do coord_flip first, then annotations to appear in the background, segment the topmost layer:
+  coord_flip() +
+  # Add some guides:
+  geom_hline(aes(yintercept = 0), color = "grey", linetype = "dashed") +
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 35, ymax = 50, fill = "steelblue", alpha = 0.2) +
+    geom_linerange(colour = "grey20", position = position_dodge(width = 0.2), linewidth = 3, na.rm = TRUE) + 
+    theme_bw() +
+    labs(x = "Series", y = "Days relative to sowing") +
+    theme(axis.title = element_text(face = "bold", size = 11))
+```
+
+
+
+
+<!-- # Summary variables -->
 ```{r summary-variables, eval=FALSE}
 weather_vars <- function(whichvar, start, end) {
   # Calculate the weather-based summary variable for each observation
@@ -713,8 +880,8 @@ weather.vars <- purrr::reduce(list(u, v, w, x, y, z), dplyr::left_join, by = "su
 save(weather.vars, file = "WeatherVars.RData")
 ```
 
+
+
 <!-- #  Further... -->
-
 <!-- One issue that is of concern is the small nature of the dataset.  However, if we could generate artificial datasets, those could be used for model training. -->
-
 <!-- [See this R package on GANs](https://github.com/mneunhoe/RGAN)  -->

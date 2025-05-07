@@ -16,29 +16,37 @@ knitr::opts_chunk$set(eval = TRUE, echo = T, cache = T)
 ## Packages 
 
 ```{r load-libraries, message=FALSE, warning=F}
-library(iml)           # for model-agnostic interpretation
-library(tidyverse)     # general wrangling
-library(labelled)      # for general functions to work with labelled data
-library(gtsummary)     # automatic use of variable labels in summary tables
-library(kableExtra)    # nice table output in html
+library(iml)           # for model-agnostic interpretation; Ver. 0.11.3
+library(tidyverse)     # general wrangling; Ver. 2.0.0
+library(rsample)       # for bootstrap resampling; Ver. 1.2.1
+library(labelled)      # for general functions to work with labelled data; Ver. 2.13.0
+library(gtsummary)     # automatic use of variable labels in summary tables; Ver. 2.0.3
+library(kableExtra)    # nice table output in html; Ver. 1.4.0
 
-library(ranger)        # random forest model fitting
-library(tuneRanger)    # for tuning a ranger model
-library(mlr)           # an mlr task is required by tuneRanger
-library(pROC)          # to get the C-statistic
-library(vip)           # Variable importance measures
-library(pdp)           # Partial dependence plots
+library(ranger)        # random forest model fitting; Ver. 0.16.0
+library(tuneRanger)    # for tuning a ranger model; Ver. 0.7
+library(mlr)           # an mlr task is required by tuneRanger; Ver. 2.19.2
+library(cutpointr)     # Cutpoint determination for classification; Ver. 1.2.0
+library(furrr)         # For parallel processing; Ver. 0.3.1
+library(bayestestR)    # For calculating HDI; Ver. 0.15.0
+library(pROC)          # to get the C-statistic; Ver. 1.18.5
+library(vip)           # Variable importance measures; Ver. 0.4.1
+library(pdp)           # Partial dependence plots; Ver. 0.8.1
 
-library(VSURF)         # for RF-based predictor selection
+library(VSURF)         # for RF-based predictor selection; Ver. 1.2.0
 
-library(predtools)     # Calibration plot
-library(scoring)       # Brier score
-library(patchwork)     # Combining plots
-library(lattice)       # Wireframe plots for 2-way pdp
+library(predtools)     # Calibration plot; Ver. 0.0.3
+library(patchwork)     # Combining plots; Ver. 1.3.0
+library(lattice)       # Wireframe plots for 2-way pdp; Ver. 0.22-6
 
-library(kernelshap)    # Getting SHAP values
-library(shapviz)       # Visualize said SHAP values
-library(tictoc)        # How long stuff takes 
+library(kernelshap)    # Getting SHAP values; Ver. 0.7.0
+library(shapviz)       # Visualize said SHAP values; Ver. 0.9.6
+library(tictoc)        # How long stuff takes; Ver.  1.2.1
+
+
+library(rms)               # Fit logistic regression models; Ver. 6.8-2
+library(CalibrationCurves) # Plot calibration curves; Ver.2.0.3
+library(R.devices)     # suppressGraphics function to suppress the automatic outputting of a plot     
 ```
 
 
@@ -176,13 +184,15 @@ First, tune the model on the hyperparameters:
 
 <!-- Data setup -->
 ```{r data-setup-for-ranger-tuning}
-# mlr expects a data frame:
 X.df <- 
   X %>% 
   # Remove the subject column:
   # Also drainage, as prelim fitting showed it had NEGATIVE importance! Negative importance can happen, and indicates the variable is a worse predictor than random permutation.
   dplyr::select(-subject, -drainage) %>% 
-  as.data.frame(X)
+  # set the response as a factor:
+  dplyr::mutate(wm = factor(wm, levels = c("0", "1"))) %>% 
+  # mlr expects a data frame:
+  as.data.frame()
 ```
 
 <!-- Tune a random forest model -->
@@ -191,7 +201,9 @@ X.df <-
 set.seed(14092)
 
 # For tuneRanger, a mlr task has to be created:
-cc.task <- mlr::makeRegrTask(data = X.df, target = "wm")
+# With mlr, the target variable doesn't have to be a factor, but it's recommended for clarity.
+# If you don't specify the positive argument, mlr will use the first factor level of the target variable as the positive class
+cc.task <- mlr::makeClassifTask(data = X.df, target = "wm", positive = "1")
 
 
 ## with tuneRanger (following Probst et al and the documentation)
@@ -199,40 +211,193 @@ cc.task <- mlr::makeRegrTask(data = X.df, target = "wm")
 estimateTimeTuneRanger(cc.task)
 
 # Tuning process:
-rf.tuned <- tuneRanger(cc.task, num.trees = 1000)
+tictoc::tic()
+rf.tuned <- tuneRanger(cc.task, num.trees = 1000, show.info = FALSE)
+tictoc::toc()  # 48 sec
 
-# Save the fitted model so that you don't have to re-tune:
-save(rf.tuned, file = here::here("Modeling", "rf_tuned.RData"))
+# Save the fitted model and associated dataframe so that you don't have to re-tune:
+save(rf.tuned, X.df, file = here::here("Modeling", "rf_tuned.RData"))
 ```
 
 
 ## Examine the fitted model {.tabset .tabset-fade .tabset-pills}
-```{r tuned-ranger-model-predictions}
-# Load the fitted model:
-load(here::here("Modeling", "rf_tuned.RData"))
+```{r load-tuned-ranger-model}
+# Load the fitted model and associated dataframe:
+load(here::here("Modeling", "rf_tuned.RData"))  # rf.tuned, X.df
 
 # Model with the new tuned hyperparameters
 # rf.tuned$model
-
-# Prediction (a data frame with two columns: truth, response)
-pred <- predict(rf.tuned$model, newdata = X.df)$data
 ```
 
+```{r tuned-ranger-model-predictions, eval=FALSE}
+# Predicted probabilities directly from the tuned model.
+
+# Prediction (a data frame with two columns: truth, response)
+# where truth = 0, 1 for the observed wm status
+# response = the fitted Prob(wm = 1)
+# NOTE: here truth is a factor
+pred <-
+  predict(rf.tuned$model, newdata = X.df)$data %>%
+  dplyr::select(truth, prob.1) %>%
+  dplyr::rename(response = prob.1)
+
+# Check:
+head(pred)
+```
 
 ### The tuned hyperparameters
 ```{r tuned-ranger-model-hyperparameters}
 rf.tuned.pars <-
-  tibble::tibble(
+  list(
     mtry = rf.tuned$recommended.pars$mtry,
     min.node.size = rf.tuned$recommended.pars$min.node.size,
     sample.fraction = rf.tuned$recommended.pars$sample.fraction,
     num.trees = rf.tuned$model$learner$par.vals$num.trees
   ) 
 
-rf.tuned.pars %>% 
-   make_kable()
+rf.tuned.pars %>%
+  as_tibble() %>%
+  make_kable()
 ```
 
+### Estimating optimism
+```{r tuned-ranger-model-estimate-optimism, eval=FALSE}
+# Function to calculate Youden Index, Sensitivity, and Specificity using the `cutpointr` package:
+calc_metrics_cutpointr <- function(pred) {
+  opt_cut <- cutpointr::cutpointr(
+    data = pred,
+    x = response,
+    class = truth,
+    direction = ">=",
+    pos_class = 1,
+    neg_class = 0,
+    method = maximize_metric,
+    metric = youden
+  )
+  
+  list(
+    YI = opt_cut$youden,
+    Se = as.numeric(opt_cut$sensitivity),
+    Sp = as.numeric(opt_cut$specificity),
+    AUC = opt_cut$AUC,
+    brier = mean((pred$response - ifelse(pred$truth == "1", 1, 0))^2)
+  )
+}
+
+# 1. Prepare predictions dataframe:
+pred <-
+  predict(rf.tuned$model, newdata = X.df)$data %>%
+  dplyr::select(truth, prob.1) %>%
+  dplyr::rename(response = prob.1)
+
+# 2. Calculate apparent performance
+apparent_perf <- calc_metrics_cutpointr(pred)
+
+# 3. Bootstrap process
+bootstrap_fxn <- function(i) {
+  # Print the current iteration
+  cat("Currently processing iteration: ", i, "\n")
+  
+  # a. Generate bootstrap sample
+  boot_sample <- 
+    rsample::bootstraps(X.df, times = 1, strata = wm)$splits[[1]] %>%
+    rsample::analysis()
+  
+  # b. Create classification task and fit model on bootstrap sample with error handling
+  cc.task <- mlr::makeClassifTask(data = boot_sample, target = "wm", positive = "1")
+  
+  boot_model <- tryCatch(
+    expr = {
+      tuneRanger::tuneRanger(cc.task, num.trees = 1000, show.info = FALSE)$model
+    },
+    error = function(e) {
+      cat("Error occurred in iteration", i, ":", e$message, "\n")
+      return(NULL) # Return NULL if an error occurs
+    }
+  )
+  
+  # If boot_model is NULL, skip this iteration
+  if (is.null(boot_model)) {
+    cat("Skipping iteration", i, "due to error.\n")
+    return(NULL)
+  }
+  
+  # c. Calculate metrics on bootstrap sample (training performance)
+  boot_pred <- 
+    predict(boot_model, newdata = boot_sample)$data %>%
+    dplyr::select(truth, prob.1) %>%
+    dplyr::rename(response = prob.1)
+  
+  train_perf <- calc_metrics_cutpointr(boot_pred)
+  
+  # d & e. Apply bootstrap model to original dataset and calculate metrics (test performance)
+  test_pred <- predict(boot_model, newdata = X.df)$data %>%
+    dplyr::select(truth, prob.1) %>%
+    dplyr::rename(response = prob.1)
+  
+  test_perf <- calc_metrics_cutpointr(test_pred)
+  
+  # f. Calculate optimism
+  optimism <- purrr::map2_dbl(train_perf, test_perf, \(x, y) x-y)
+  
+  tibble(
+    iteration = i,
+    metric = names(train_perf),
+    train = unlist(train_perf),
+    test = unlist(test_perf),
+    optimism = optimism)
+  }
+
+set.seed(123)
+# Run bootstrap_fxn in parallel:
+my.seeds <- c(1:1000)
+
+plan(list(tweak(multisession, workers = 5), sequential))
+tictoc::tic()
+bootstrap_results <- 
+  furrr::future_map(my.seeds, bootstrap_fxn, .options = furrr_options(seed = TRUE)) %>% 
+  purrr::list_rbind()
+tictoc::toc()  # 11404.61 sec ~ 3.17 hr
+
+plan(sequential)
+
+# 4. Apparent performance bootstrap HDI
+apparent_CI <-
+  bootstrap_results %>% 
+  dplyr::group_by(metric) %>% 
+  dplyr::summarize(app_LCI = bayestestR::hdi(train, ci = 0.95)$CI_low, 
+                   app_UCI = bayestestR::hdi(train, ci = 0.95)$CI_high)
+
+# 5. Average optimism across all bootstrap samples
+avg_optimism <- 
+  bootstrap_results %>%
+  dplyr::group_by(metric) %>%
+  dplyr::summarize(avg_optimism = mean(optimism))
+
+# 6. Calculate optimism-corrected performance
+corrected_perf <- 
+  tibble(
+    metric = names(apparent_perf),
+    apparent = unlist(apparent_perf)
+  ) %>%
+  dplyr::left_join(apparent_CI, by = "metric") %>%
+  dplyr::left_join(avg_optimism, by = "metric") %>%
+  dplyr::mutate(corrected = apparent - avg_optimism)
+
+
+# Save the results so that you don't have to ever, ever repeat this time-consuming process:
+save(pred, apparent_perf, bootstrap_results, corrected_perf, file = here::here("Modeling", "RFoptimism.RData"))
+```
+
+
+```{r tuned-ranger-model-load-optimism-results}
+# Load the model-fitted probs and the optimism estimates:
+# pred, apparent_perf, bootstrap_results, corrected_perf
+load(here::here("Modeling", "RFoptimism.RData"))  
+
+corrected_perf %>% 
+  make_kable()
+```
 
 
 ### C-statistic
@@ -245,23 +410,38 @@ roc_obj <- pROC::roc(pred$truth, pred$response, levels = c(0, 1))
 ci_obj <- ci.auc(roc_obj)
 
 
-# Extremely high, so overfitting is a concern:
-tibble(Lower = ci_obj[1], Estimate = ci_obj[2], Upper = ci_obj[3]) %>% 
-  make_kable()
+res_C <- matrix(
+  c(ci_obj[2],
+    ci_obj[1],
+    ci_obj[3],
+    corrected_perf %>% dplyr::filter(metric == "AUC") %>% dplyr::pull(corrected) %>% unname(),
+    NA,
+    NA),
+  
+  nrow = 1,
+  ncol = 6,
+  byrow = T,
+  
+  dimnames = list(
+    c("C-statistic"),
+    rep(c("Estimate", "Lower .95 ", "Upper .95"), 2)
+  )
+)
+
+res_C %>% 
+  make_kable() %>% 
+  add_header_above(c(" " = 1, 
+                     "Apparent" = 3, 
+                     "Internal" = 3))
 ```
+
 
 ### Brier score
 ```{r tuned-ranger-model-Brier-score}
 # Brier score:
-## Using base R:
-# Assuming 'pred' is your data frame with 'truth' and 'response' columns
-brier_score <- mean((pred$response - pred$truth)^2)
-
-# print(paste("Brier Score:", round(brier_score, 4)))
-
-## Using the 'scoring' Package:
-brier_result <- brierscore(truth~response, data = pred)
-data.frame(Brier = mean(brier_result)) %>% make_kable
+tibble::tibble(`Brier (apparent)` = corrected_perf %>% dplyr::filter(metric == "brier") %>% dplyr::pull(apparent) %>% unname(), 
+               `Brier (internal)` = corrected_perf %>% dplyr::filter(metric == "brier") %>% dplyr::pull(corrected) %>% unname()) %>% 
+  make_kable()
 ```
 
 
@@ -269,8 +449,10 @@ data.frame(Brier = mean(brier_result)) %>% make_kable
 #### Calibration plot 
 ```{r tuned-ranger-model-Calibration-plot, results='hide', fig.keep='last', fig.cap='Calibration plot for a tuned random forest model fit to 16 predictors.'}
 # Assuming 'pred' is your data frame with 'truth' and 'response' columns
+# For the function to work, you need to represent truth as a numeric
+RF1CC <- CalibrationCurves::valProbggplot(pred$response, ifelse(pred$truth == "1", 1, 0))$ggPlot
 
-CalibrationCurves::valProbggplot(pred$response, pred$truth)
+RF1CC
 ```
 
 
@@ -286,6 +468,143 @@ pred %>%
   geom_rug(col = "blue", alpha = 0.5) + 
   labs(x = "Probability estimate of white mold", y = "No. of fields") +
   theme_bw()
+```
+
+
+#### ICI {.tabset .tabset-fade .tabset-pills}
+##### Apparent
+```{r tuned-ranger-model-ICI-apparent-with-CalibrationCurves, eval=FALSE}
+# As a background check:
+# Get the apparent estimate using CalibrationCurves, which generates a flexible calibration curve based on loess as the default.
+RFcalPerf <- suppressGraphics({
+  CalibrationCurves::val.prob.ci.2(pred$response, ifelse(pred$truth == "1", 1, 0))
+})
+
+RFcalPerf$stats["Eavg"]
+```
+
+
+```{r tuned-ranger-model-Calibration-measures-ICI-E50-E90-by-hand, message=FALSE}
+# Calibration measures ICI, E50, E90 based on secondary logistic regression
+# Create a copy of the X.df data frame, with pred added as a column:
+Xmod <-
+  X.df %>%
+  # For the loess, need wm as a numeric:
+  dplyr::mutate(wm = as.numeric(wm)-1) %>% 
+  dplyr::mutate(pred = pred$response)
+
+# Use loess to fit the flexible calibration curve:
+fit_cal <- loess(wm ~ pred, 
+                 data = Xmod, 
+                 span = 0.75, 
+                 degree = 2, 
+                 family = "gaussian")
+
+cal_obs <- predict(fit_cal)
+
+dt_cal <- 
+  cbind.data.frame(
+    "obs" = cal_obs,
+    "pred" = pred$response)
+
+
+res_calmeas <-
+  c(
+    "ICI" = mean(abs(dt_cal$obs - dt_cal$pred)),
+    "E50" = median(abs(dt_cal$obs - dt_cal$pred)),
+    "E90" = unname(quantile(abs(dt_cal$obs - dt_cal$pred), 
+                            probs = .90))
+)
+
+
+## Bootstrap confidence intervals for the calibration  measures (ICI, E50, E90)
+alpha <- .05
+# Set B = 2000 although it takes more time:
+B <- 2000 
+set.seed(2022)
+# Using stratification on wm because of the imbalance between the classes:
+vboot <- rsample::bootstraps(X.df, times = B, strata = wm)
+
+# Bootstrap calibration measures
+numsum_boot <- function(split) {
+  
+  boot_pred <- predict(rf.tuned$model, newdata = rsample::analysis(split))$data %>%
+  dplyr::pull(prob.1)
+
+  v_cal <- loess(wm ~ boot_pred, 
+                 data = rsample::analysis(split) %>% dplyr::mutate(wm = as.numeric(wm)-1), 
+                 span = 0.75, 
+                 degree = 2, 
+                 family = "gaussian")
+
+  cal_obs_boot <- predict(v_cal)
+  
+  # Save objects needed
+  db_cal_boot <- data.frame(
+    "obs" = cal_obs_boot,
+    "pred" = boot_pred
+    )
+  
+  absdiff_boot <- abs(db_cal_boot$obs - db_cal_boot$pred)
+
+  res_cal_boot <- data.frame(
+    "ICI" = mean(absdiff_boot),
+    "E50" = quantile(absdiff_boot, probs = .5),
+    "E90" = quantile(absdiff_boot, probs = .9)
+  )
+  }  # end of function
+
+# Example of use:
+# (bar <- purrr::pluck(vboot, "splits", 1) %>% numsum_boot())
+
+
+tictoc::tic()
+numsum_b <- 
+  vboot %>% 
+  dplyr::mutate(num_cal_boot = purrr::map(splits, numsum_boot),
+                
+                ICI = purrr::map_dbl(num_cal_boot, ~ .x$ICI),
+         
+                E50 = purrr::map_dbl(num_cal_boot, ~ .x$E50),
+         
+                E90 = purrr::map_dbl(num_cal_boot, ~ .x$E90)
+         )
+tictoc::toc()  # ~ 74 sec
+
+# numsum_b is a tibble with 2,000 rows
+# Now we need to process the results to get the bootstrap CIs:
+alpha <- .05
+res_numcal <- matrix(c(res_calmeas["ICI"],
+                       quantile(numsum_b$ICI, probs = alpha / 2),
+                       quantile(numsum_b$ICI, 
+                                probs = 1 - alpha / 2),
+                       
+                       res_calmeas["E50"],
+                       quantile(numsum_b$E50, probs = alpha / 2),
+                       quantile(numsum_b$E50, probs = 1 - alpha / 2),
+                       
+                       res_calmeas["E90"],
+                       quantile(numsum_b$E90, probs = alpha / 2),
+                       quantile(numsum_b$E90, probs = 1 - alpha / 2)
+                       ),
+                     nrow = 1,
+                     ncol = 9,
+                     byrow = T,
+                     dimnames = list(
+                       c("Apparent"),
+                       rep(
+                         c("Estimate", "Lower.95", "Upper.95"),
+                         3))
+)
+
+
+# Present the results:
+res_numcal %>% 
+  make_kable()  %>% 
+  add_header_above(c(" " = 1,  
+                     "ICI" = 3, 
+                     "E50" = 3,
+                     "E90" = 3))
 ```
 
 
@@ -306,7 +625,7 @@ When using model agnostic procedures, additional code preparation is often requi
 
 # Refit model (with the tuned parameters) using the ranger package directly (makes life easier):
 # Reminder: the tuned parameter settings:
-# rf.tuned$recommended.pars
+# rf.tuned.pars
 
 set.seed(14092)
 m1 <- ranger(wm ~ ., 
@@ -314,10 +633,11 @@ m1 <- ranger(wm ~ .,
              importance = 'permutation',
              scale.permutation.importance = TRUE,
              # Set the hyperparameters:
-             num.trees = rf.tuned.pars$num.trees[1],
-             mtry = rf.tuned.pars$mtry[1],
-             min.node.size = rf.tuned.pars$min.node.size[1], 
-             sample.fraction = rf.tuned.pars$sample.fraction[1])
+             num.trees = rf.tuned.pars$num.trees,
+             mtry = rf.tuned.pars$mtry,
+             min.node.size = rf.tuned.pars$min.node.size, 
+             sample.fraction = rf.tuned.pars$sample.fraction,
+             probability = TRUE)
 ```
 
 
@@ -326,16 +646,16 @@ m1 <- ranger(wm ~ .,
 features <- X.df %>% dplyr::select(-wm)
 
 # 2) Create a vector with the actual responses
-response <-  X.df %>% dplyr::pull(wm)
+response <-  X.df %>% dplyr::mutate(wm = ifelse(wm == "1", 1, 0)) %>% dplyr::pull(wm)
 
 # 3) Create custom predict function that returns the predicted values as a vector
-pred <- function(object, newdata) {
-  results <- predict(object, data = newdata)$predictions
+pred.fxn <- function(object, newdata) {
+  results <- predict(object, data = newdata, type = "response")$predictions[, 2]
   return(results)
 }
 
 # Example of prediction output:
-# pred(m1, features) %>% head()
+# pred.fxn(m1, X.df) %>% head()
 
 # Once we have these three components we can create our model agnostic objects for the iml package, which will just pass these downstream components (along with the ML model) to other functions.
 # iml model agnostic object:
@@ -343,14 +663,14 @@ components_iml <- Predictor$new(
   model = m1, 
   data = features, 
   y = response, 
-  predict.fun = pred
+  predict.fun = pred.fxn
 )
 ```
 
 
 ### Variable importance
 The variable importance plot shows that not all predictors may be necessary.
-```{r variable-importance-plot, dependson='assign-variable-labels', fig.cap='Permutation-based variable importance for a tuned random forest model. Importance was computed using log loss as the performance metric.'}
+```{r variable-importance-plot-setup, eval=FALSE}
 # You can get an importance measure from ranger:
 # ranger::importance(m1)
 
@@ -361,17 +681,28 @@ The variable importance plot shows that not all predictors may be necessary.
 
 
 # Here we will use the vi_permute function to set some other options, like use logloss as the metric.
+tictoc::tic()
 wm_vip <- 
   vi_permute(
     m1,
   # metric arg calls yardstick, which expects wm = 1 (target) as the FIRST level; and as a factor:
-  train = X.df %>% dplyr::mutate(wm = factor(wm, levels = c(1, 0))),
+  train = X.df %>% dplyr::mutate(wm = factor(wm, levels = c("1", "0"))),
   target = "wm",
   metric = "logloss",
   smaller_is_better = TRUE,  # see list_metrics()
-  nsim = 10,
-  pred_wrapper = pred
+  nsim = 100,
+  pred_wrapper = pred.fxn
 )
+tictoc::toc() # 48 sec
+
+# Save the result:
+save(wm_vip, file = here::here("Modeling", "vip.RData"))
+```
+
+
+```{r variable-importance-plot-plot, dependson='assign-variable-labels', fig.cap='Permutation-based variable importance for a tuned random forest model. Importance was computed using log loss as the performance metric.'}
+# Load the vip results:
+load(here::here("Modeling", "vip.RData"))
 
 # A named vector of the labels:
 wm_vip_labels <-
@@ -393,6 +724,7 @@ wm_vip %>%
   theme(axis.title.x = element_text(face = "bold", size = 11)) +
   theme(axis.text.y = element_text(size = 8))
 ```
+
 
 
 # RF variable selection {.tabset .tabset-fade .tabset-pills}
@@ -438,10 +770,12 @@ class(X.sel)  # we are good
 set.seed(5309)  # Jenny, I got your number!
 
 # For tuneRanger, a mlr task has to be created:
-cc.task <- mlr::makeRegrTask(data = X.sel, target = "wm")
+cc.task <- mlr::makeClassifTask(data = X.sel, target = "wm", positive = "1")
 
 # Tuning process:
-rf.tuned.sel <- tuneRanger(cc.task, num.trees = 500) # Reducing the no. trees as we don't have many predictors
+tictoc::tic()
+rf.tuned.sel <- tuneRanger(cc.task, num.trees = 500, show.info = FALSE) # Reducing the no. trees as we don't have many predictors
+tictoc::toc()  # 42 sec
 
 # Save the fitted model so that you don't have to re-tune:
 save(rf.tuned.sel, X.sel, selected_vars, file = here::here("Modeling", "rf_tuned_sel.RData"))
@@ -461,22 +795,136 @@ load(here::here("Modeling", "rf_tuned_sel.RData"))  # rf.tuned.sel, X.sel, selec
 ### The tuned hyperparameters
 ```{r sel-RF-model-hyperparameters}
 rf.tuned.sel.pars <-
-  tibble::tibble(
+  list(
     mtry = rf.tuned.sel$recommended.pars$mtry,
     min.node.size = rf.tuned.sel$recommended.pars$min.node.size,
     sample.fraction = rf.tuned.sel$recommended.pars$sample.fraction,
     num.trees = rf.tuned.sel$model$learner$par.vals$num.trees
     ) 
 
-rf.tuned.sel.pars %>% 
-   make_kable()
+rf.tuned.sel.pars %>%
+  as_tibble() %>%
+  make_kable()
 ```
 
 
-<!-- Setup for C-statistic, Brier score and calibration plots -->
-```{r sel-RF-model-prediction-setup}
-# Prediction (a data frame with two columns: truth, response)
-pred.vals <- predict(rf.tuned.sel$model, newdata = X.sel)$data
+### Estimating optimism
+```{r sel-RF-model-estimate-optimism, eval=FALSE}
+# 1. Prepare predictions dataframe:
+sel_pred <-
+  predict(rf.tuned.sel$model, newdata = X.sel)$data %>%
+  dplyr::select(truth, prob.1) %>%
+  dplyr::rename(response = prob.1)
+
+# 2. Calculate apparent performance
+sel_apparent_perf <- calc_metrics_cutpointr(sel_pred)
+
+# 3. Bootstrap process
+bootstrap_fxn <- function(i) {
+  # Print the current iteration
+  cat("Currently processing iteration: ", i, "\n")
+  
+  # a. Generate bootstrap sample
+  boot_sample <- 
+    rsample::bootstraps(X.sel, times = 1, strata = wm)$splits[[1]] %>%
+    rsample::analysis()
+  
+  # b. Create classification task and fit model on bootstrap sample with error handling
+  cc.task <- mlr::makeClassifTask(data = boot_sample, target = "wm", positive = "1")
+  
+  boot_model <- tryCatch(
+    expr = {
+      tuneRanger::tuneRanger(cc.task, num.trees = 500, show.info = FALSE)$model
+    },
+    error = function(e) {
+      cat("Error occurred in iteration", i, ":", e$message, "\n")
+      return(NULL) # Return NULL if an error occurs
+    }
+  )
+  
+  # If boot_model is NULL, skip this iteration
+  if (is.null(boot_model)) {
+    cat("Skipping iteration", i, "due to error.\n")
+    return(NULL)
+  }
+  
+  # c. Calculate metrics on bootstrap sample (training performance)
+  boot_pred <- 
+    predict(boot_model, newdata = boot_sample)$data %>%
+    dplyr::select(truth, prob.1) %>%
+    dplyr::rename(response = prob.1)
+  
+  train_perf <- calc_metrics_cutpointr(boot_pred)
+  
+  # d & e. Apply bootstrap model to original dataset and calculate metrics (test performance)
+  test_pred <- predict(boot_model, newdata = X.sel)$data %>%
+    dplyr::select(truth, prob.1) %>%
+    dplyr::rename(response = prob.1)
+  
+  test_perf <- calc_metrics_cutpointr(test_pred)
+  
+  # f. Calculate optimism
+  optimism <- purrr::map2_dbl(train_perf, test_perf, \(x, y) x-y)
+  
+  tibble(
+    iteration = i,
+    metric = names(train_perf),
+    train = unlist(train_perf),
+    test = unlist(test_perf),
+    optimism = optimism)
+  }
+
+set.seed(123)
+# Run bootstrap_fxn in parallel:
+my.seeds <- c(1:1000)
+
+plan(list(tweak(multisession, workers = 5), sequential))
+tictoc::tic()
+bootstrap_results <- 
+  furrr::future_map(my.seeds, bootstrap_fxn, .options = furrr_options(seed = TRUE)) %>% 
+  purrr::list_rbind()
+tictoc::toc()  # 9755.02 sec ~ 2.7 hr
+
+plan(sequential)
+
+
+# 4. Apparent performance bootstrap HDI
+apparent_CI <-
+  bootstrap_results %>%
+  dplyr::group_by(metric) %>%
+  dplyr::summarize(app_LCI = bayestestR::hdi(train, ci = 0.95)$CI_low, 
+                   app_UCI = bayestestR::hdi(train, ci = 0.95)$CI_high)
+
+
+# 5. Average optimism across all bootstrap samples
+avg_optimism <- 
+  bootstrap_results %>%
+  dplyr::group_by(metric) %>%
+  dplyr::summarize(avg_optimism = mean(optimism))
+
+# 6. Calculate optimism-corrected performance
+sel_corrected_perf <- 
+  tibble(
+    metric = names(sel_apparent_perf),
+    apparent = unlist(sel_apparent_perf)
+    ) %>%
+  dplyr::left_join(apparent_CI, by = "metric") %>%
+  dplyr::left_join(avg_optimism, by = "metric") %>%
+  dplyr::mutate(corrected = apparent - avg_optimism)
+
+
+# Save the results so that you don't have to ever, ever repeat this time-consuming process:
+save(sel_pred, sel_apparent_perf, bootstrap_results, sel_corrected_perf, file = here::here("Modeling", "RFseloptimism.RData"))
+```
+
+
+```{r sel-RF-model-load-optimism-results}
+# Load the model-fitted probs and the optimism estimates:
+# sel_pred, sel_apparent_perf, bootstrap_results, sel_corrected_perf
+load(here::here("Modeling", "RFseloptimism.RData"))  
+
+sel_corrected_perf %>% 
+  make_kable()
 ```
 
 
@@ -484,28 +932,43 @@ pred.vals <- predict(rf.tuned.sel$model, newdata = X.sel)$data
 The AUROC is **still** extremely high, even with this reduced set of predictors.
 ```{r sel-RF-model-C-statistic, message=FALSE}
 # Get the C-statistic (AUROC):
-# Assuming your data frame is called 'pred.vals' with columns 'truth' and 'response'
-roc_obj <- pROC::roc(pred.vals$truth, pred.vals$response, levels = c(0, 1))
+# Assuming your data frame is called 'sel_pred' with columns 'truth' and 'response'
+roc_obj <- pROC::roc(sel_pred$truth, sel_pred$response, levels = c(0, 1))
 
-# 95% CI for the C-statistic is STILL extremely high, so overfitting is still a concern
+# 95% CI for the C-statistic:
 ci_obj <- ci.auc(roc_obj)
 
-tibble(Lower = ci_obj[1], Estimate = ci_obj[2], Upper = ci_obj[3]) %>% 
-  make_kable()
+res_C <- matrix(
+  c(ci_obj[2],
+    ci_obj[1],
+    ci_obj[3],
+    sel_corrected_perf %>% dplyr::filter(metric == "AUC") %>% dplyr::pull(corrected) %>% unname(),
+    NA,
+    NA),
+  
+  nrow = 1,
+  ncol = 6,
+  byrow = T,
+  
+  dimnames = list(
+    c("C-statistic"),
+    rep(c("Estimate", "Lower .95 ", "Upper .95"), 2)
+  )
+)
+
+res_C %>% 
+  make_kable() %>% 
+  add_header_above(c(" " = 1, 
+                     "Apparent" = 3, 
+                     "Internal" = 3))
 ```
 
 ### Brier score
 ```{r sel-RF-model-Brier-score}
 # Brier score:
-## Using base R:
-# Assuming 'pred.vals' is your data frame with 'truth' and 'response' columns
-brier_score <- mean((pred.vals$response - pred.vals$truth)^2)
-
-# print(paste("Brier Score:", round(brier_score, 4)))
-
-## Using the 'scoring' Package:
-brier_result <- brierscore(truth~response, data = pred.vals)
-data.frame(Brier = mean(brier_result)) %>% make_kable
+tibble::tibble(`Brier (apparent)` = sel_corrected_perf %>% dplyr::filter(metric == "brier") %>% dplyr::pull(apparent) %>% unname(), 
+               `Brier (internal)` = sel_corrected_perf %>% dplyr::filter(metric == "brier") %>% dplyr::pull(corrected) %>% unname()) %>% 
+  make_kable()
 ```
 
 ### Calibration {.tabset .tabset-fade .tabset-pills}
@@ -523,9 +986,9 @@ For more information on calibration and re-calibration approaches, see [this tid
 It may still be useful for **discrimination**.
 
 ```{r sel-RF-model-Calibration-plot, results='hide', fig.keep='last', fig.cap='Calibration plot for a tuned random forest model fit to a selected subset of the predictors. The subset was identified by the VSURF algorithm.'}
-# Assuming 'pred.vals' is your data frame with 'truth' and 'response' columns
+# Assuming 'sel_pred' is your data frame with 'truth' and 'response' columns
 calibration_plot(
-  data = pred.vals,
+  data = sel_pred %>% dplyr::mutate(truth = ifelse(truth == "1", 1, 0)),
   obs = "truth",
   pred = "response",
   title = "Calibration Plot for Random Forest Model",
@@ -534,16 +997,18 @@ calibration_plot(
 )
 
 # This is a nicer format I think:
-CalibrationCurves::valProbggplot(pred.vals$response, pred.vals$truth)
+RF2CC <- CalibrationCurves::valProbggplot(sel_pred$response, ifelse(sel_pred$truth == "1", 1, 0))$ggPlot
+
+RF2CC
 ```
 
 
 #### Histogram of predicted probabilities
 
 ```{r sel-RF-model-Calibration-histogram-pred-probs, fig.cap='Histogram of fitted probabilities for a tuned random forest model utilizing a subset of predictors identified by the VSURF algorithm.'}
-pred.vals %>%
+
+sel_pred %>%
   ggplot(aes(response)) +
-  # geom_histogram(col = "white", bins = 20) +
   geom_histogram(fill = "orange", col = "orange3", bins = 20) +
   facet_wrap(~ as.factor(truth), ncol = 1, 
              labeller = as_labeller(c("0" = "No White Mold", "1" = "White Mold Present"))) +
@@ -553,6 +1018,157 @@ pred.vals %>%
 ```
 
 
+#### ICI {.tabset .tabset-fade .tabset-pills}
+##### Apparent
+```{r sel-RF-model-ICI-apparent-with-CalibrationCurves, eval=FALSE}
+# As a background check:
+# Get the apparent estimate using CalibrationCurves, which generates a flexible calibration curve based on loess as the default.
+RFsel_calPerf <- suppressGraphics({
+  CalibrationCurves::val.prob.ci.2(sel_pred$response, ifelse(sel_pred$truth == "1", 1, 0))
+})
+
+RFsel_calPerf$stats["Eavg"]
+```
+
+
+```{r sel-RF-model-Calibration-measures-ICI-E50-E90-by-hand, message=FALSE}
+# Calibration measures ICI, E50, E90 based on secondary logistic regression
+# Create a copy of the X.sel data frame, with sel_pred added as a column:
+Xmod <-
+  X.sel %>%
+  # For the loess, need wm as a numeric:
+  dplyr::mutate(wm = as.numeric(wm)-1) %>% 
+  dplyr::mutate(pred = sel_pred$response)
+
+# Use loess to fit the flexible calibration curve:
+fit_cal <- loess(wm ~ pred, 
+                 data = Xmod, 
+                 span = 0.75, 
+                 degree = 2, 
+                 family = "gaussian")
+
+cal_obs <- predict(fit_cal)
+
+dt_cal <- 
+  cbind.data.frame(
+    "obs" = cal_obs,
+    "pred" = sel_pred$response)
+
+
+res_calmeas <-
+  c(
+    "ICI" = mean(abs(dt_cal$obs - dt_cal$pred)),
+    "E50" = median(abs(dt_cal$obs - dt_cal$pred)),
+    "E90" = unname(quantile(abs(dt_cal$obs - dt_cal$pred), 
+                            probs = .90))
+)
+
+
+## Bootstrap confidence intervals for the calibration  measures (ICI, E50, E90)
+alpha <- .05
+# Set B = 2000 although it takes more time:
+B <- 2000 
+set.seed(2022)
+# Using stratification on wm because of the imbalance between the classes:
+vboot <- rsample::bootstraps(X.sel, times = B, strata = wm)
+
+# Bootstrap calibration measures
+numsum_boot <- function(split) {
+  
+  boot_pred <- predict(rf.tuned.sel$model, newdata = rsample::analysis(split))$data %>%
+  dplyr::pull(prob.1)
+
+  v_cal <- loess(wm ~ boot_pred, 
+                 data = rsample::analysis(split) %>% dplyr::mutate(wm = as.numeric(wm)-1), 
+                 span = 0.75, 
+                 degree = 2, 
+                 family = "gaussian")
+
+  cal_obs_boot <- predict(v_cal)
+  
+  # Save objects needed
+  db_cal_boot <- data.frame(
+    "obs" = cal_obs_boot,
+    "pred" = boot_pred
+    )
+  
+  absdiff_boot <- abs(db_cal_boot$obs - db_cal_boot$pred)
+
+  res_cal_boot <- data.frame(
+    "ICI" = mean(absdiff_boot),
+    "E50" = quantile(absdiff_boot, probs = .5),
+    "E90" = quantile(absdiff_boot, probs = .9)
+  )
+  }  # end of function
+
+# Example of use:
+# (bar <- purrr::pluck(vboot, "splits", 1) %>% numsum_boot())
+
+
+tictoc::tic()
+numsum_b <- 
+  vboot %>% 
+  dplyr::mutate(num_cal_boot = purrr::map(splits, numsum_boot),
+                
+                ICI = purrr::map_dbl(num_cal_boot, ~ .x$ICI),
+         
+                E50 = purrr::map_dbl(num_cal_boot, ~ .x$E50),
+         
+                E90 = purrr::map_dbl(num_cal_boot, ~ .x$E90)
+         )
+tictoc::toc()  # ~ 74 sec
+
+# numsum_b is a tibble with 2,000 rows
+# Now we need to process the results to get the bootstrap CIs:
+alpha <- .05
+res_numcal <- matrix(c(res_calmeas["ICI"],
+                       quantile(numsum_b$ICI, probs = alpha / 2),
+                       quantile(numsum_b$ICI, 
+                                probs = 1 - alpha / 2),
+                       
+                       res_calmeas["E50"],
+                       quantile(numsum_b$E50, probs = alpha / 2),
+                       quantile(numsum_b$E50, probs = 1 - alpha / 2),
+                       
+                       res_calmeas["E90"],
+                       quantile(numsum_b$E90, probs = alpha / 2),
+                       quantile(numsum_b$E90, probs = 1 - alpha / 2)
+                       ),
+                     nrow = 1,
+                     ncol = 9,
+                     byrow = T,
+                     dimnames = list(
+                       c("Apparent"),
+                       rep(
+                         c("Estimate", "Lower.95", "Upper.95"),
+                         3))
+)
+
+
+# Present the results:
+res_numcal %>% 
+  make_kable()  %>% 
+  add_header_above(c(" " = 1,  
+                     "ICI" = 3, 
+                     "E50" = 3,
+                     "E90" = 3))
+```
+
+
+#### Comparison to the RF1 model
+```{r RF1-vs-RF2-Calibration-plots, fig.height=9.0}
+(RF1CC + RF2CC) +
+  plot_annotation(tag_levels = "A") +
+  plot_layout(nrow = 2, byrow = TRUE, guides = "collect") & 
+  cowplot::theme_half_open(font_size = 12) &
+  theme(legend.position = "bottom", 
+        legend.direction = "horizontal")
+ggsave("figs/RF_calibration_plot.png", dpi = 600, height = 7, width = 5, bg = "white" )
+ggsave("figs/RF_calibration_plot.pdf", dpi = 600, height = 7, width = 5, bg = "white" )
+```
+
+
+
 ### Re-Calibration {.tabset .tabset-fade .tabset-pills}
 Here we just use simple Platt scaling manually.  NOTE: Platt scaling assumes a sigmoid relationship between the original probabilities and the true probabilities. If this assumption doesn't hold for your data, you might want to consider other calibration methods like isotonic regression (which we do not pursue here).
 
@@ -560,22 +1176,22 @@ You can see that a few things:  (i) one's assessment of calibration can be biase
 
 While the slope has improved, we can see that the re-calibrated probs are closer to the extremes of 0 and 1. 
 
-In summary, this short exercise shows that re-calibration does require some work -- Platt scaling does **not** work here.  The small sample size here is also an issue that may be having an effect.
+In summary, this short exercise shows that re-calibration does require some work -- Platt scaling works **partially** here.  The small sample size here is also an issue that may be having an effect.
 
 #### Re-calibration plot {.tabset .tabset-fade .tabset-pills}
 
 ##### predtools package
 ```{r sel-RF-model-Recalibration-Platt-scaling-predtools, results='hide', fig.cap='Calibration plot for the recalibrated random forest model, plotted using the predtools package'}
 # Fit a logistic regression model to the response using the predicted probs from the RF model: 
-platt_model <- glm(truth ~ response, data = pred.vals, family = "binomial")
+platt_model <- glm(truth ~ response, data = sel_pred, family = "binomial")
 
 # Apply calibration to the data:
-calibrated_probs <- predict(platt_model, newdata = data.frame(response = pred.vals$response), type = "response")
+calibrated_probs <- predict(platt_model, newdata = data.frame(response = sel_pred$response), type = "response")
 
-calibrated_data <- data.frame(truth = pred.vals$truth, response = calibrated_probs)
+calibrated_data <- data.frame(truth = sel_pred$truth, response = calibrated_probs)
 
 calibration_plot(
-  data = calibrated_data,
+  data = calibrated_data %>% dplyr::mutate(truth = ifelse(truth == "1", 1, 0)),
   obs = "truth",
   pred = "response",
   title = "Re-Calibration Plot for Random Forest Model",
@@ -588,7 +1204,7 @@ calibration_plot(
 ##### CalibrationCurves package
 ```{r sel-RF-model-Recalibration-Platt-scaling-CalibrationCurves, fig.cap='Calibration plot for the recalibrated random forest model, plotted using the CalibrationCurves package'}
 # This is a nicer format I think:
-CalibrationCurves::valProbggplot(calibrated_data$response, calibrated_data$truth)
+CalibrationCurves::valProbggplot(calibrated_data$response, ifelse(calibrated_data$truth == "1", 1, 0))$ggPlot
 ```
 
 
@@ -597,7 +1213,6 @@ CalibrationCurves::valProbggplot(calibrated_data$response, calibrated_data$truth
 ```{r sel-RF-model-Recalibration-histogram-pred-probs}
 calibrated_data %>%
   ggplot(aes(response)) +
-  # geom_histogram(col = "white", bins = 20) +
   geom_histogram(fill = "orange", col = "orange3", bins = 20) +
   facet_wrap(~ as.factor(truth), ncol = 1, 
              labeller = as_labeller(c("0" = "No White Mold", "1" = "White Mold Present"))) +
@@ -611,7 +1226,9 @@ calibrated_data %>%
 ## Model-agnostic interpretation {.tabset .tabset-fade .tabset-pills}
 <!-- Again, we fit the ranger model directly, before setting up the iml model-agnostic components. -->
 ```{r fit-tuned-sel-RF-model-to-ranger-directly, results='hide'}
-rf.tuned.sel$recommended.pars
+# Reminder: the tuned params:
+rf.tuned.sel.pars
+
 
 set.seed(14092)
 m2 <- ranger(wm ~ ., 
@@ -619,10 +1236,11 @@ m2 <- ranger(wm ~ .,
              importance = 'permutation',
              scale.permutation.importance = TRUE,
              # Set the hyperparameters:
-             num.trees = rf.tuned.sel.pars$num.trees[1],
-             mtry = rf.tuned.sel.pars$mtry[1],
-             min.node.size = rf.tuned.sel.pars$min.node.size[1], 
-             sample.fraction = rf.tuned.sel.pars$sample.fraction[1])
+             num.trees = rf.tuned.sel.pars$num.trees,
+             mtry = rf.tuned.sel.pars$mtry,
+             min.node.size = rf.tuned.sel.pars$min.node.size, 
+             sample.fraction = rf.tuned.sel.pars$sample.fraction,
+             probability = TRUE)
 ```
 
 <!-- Set up the components required for iml/model-agnostic interpretation -->
@@ -631,16 +1249,16 @@ m2 <- ranger(wm ~ .,
 features <- X.sel %>% dplyr::select(-wm)
 
 # 2) Create a vector with the actual responses
-response <-  X.sel %>% dplyr::pull(wm)
+response <-  X.sel %>% dplyr::mutate(wm = ifelse(wm == "1", 1, 0)) %>% dplyr::pull(wm)
 
 # 3) Create custom predict function that returns the predicted values as a vector
-pred <- function(object, newdata) {
-  results <- predict(object, data = newdata)$predictions
+pred.fxn <- function(object, newdata) {
+  results <- predict(object, data = newdata, type = "response")$predictions[, 2]
   return(results)
 }
 
-# Example of prediction output:
-# pred(m2, features) %>% head()
+# Example:
+# pred.fxn(m2, X.sel) %>% head()
 
 # Once we have these three components we can create our model agnostic objects for the iml package, which will just pass these downstream components (along with the ML model) to other functions.
 # iml model agnostic object:
@@ -648,7 +1266,7 @@ components_iml <- Predictor$new(
   model = m2, 
   data = features, 
   y = response, 
-  predict.fun = pred
+  predict.fun = pred.fxn
 )
 ```
 
@@ -660,12 +1278,12 @@ wm_vip <-
   vi_permute(
     m2,
   # metric arg calls yardstick, which expects wm = 1 (target) as the FIRST level; and as a factor:
-  train = X.sel %>% dplyr::mutate(wm = factor(wm, levels = c(1, 0))),
+  train = X.sel %>% dplyr::mutate(wm = factor(wm, levels = c("1", "0"))),
   target = "wm",
   metric = "logloss",
   smaller_is_better = TRUE,  # see list_metrics()
   nsim = 10,
-  pred_wrapper = pred
+  pred_wrapper = pred.fxn
 )
 
 # A named vector of the labels:
@@ -697,13 +1315,24 @@ I think the main point these plots demonstrate is the non-linearity in the relat
 # Reminder: the set of vars
 # selected_vars
 
+# If grid.resolution left NULL, it will default to the minimum between 51 and the number of unique data points for each of the continuous independent variables listed in pred.var. Therefore, let's get an idea of the number of unique data points for each var. I will use this info to set grid.resolution to a value that will be above the minimum of 51 grid points, but not too high to slow down computation.
+
+# length(unique(X.sel$t2m_mean_to_4dap))     # 297
+# length(unique(X.sel$sm_40dap_to_49dap))    # 297
+# length(unique(X.sel$stsm_35dap_to_44dap))  # 297
+# length(unique(X.sel$sm_5dap_to_15dap))     # 297
+# length(unique(X.sel$rain36to50dap))        # 213
+# length(unique(X.sel$rainto35dap))          # 210
+# length(unique(X.sel$log_silt_clay))        # 305
+
 # Compute partial dependence values. Going to write a wrapper function to get the partial values.
 # NOTE: there is a bug in the pdp::partial function. The prob arg always returns probabilities, despite the default being FALSE. 
 
-get.pd.df <- function(var) {
+get.pd.df <- function(var, getprob) {
   # Get the partial dependence values on the probability scale
   # Args:
   #  var = quoted character string of the predictor's name
+  #  getprob = logical to be passed to the prob argument of the partial function
   # Returns:
   #  a data frame with columns labelled `predvar` and `yhat`
   
@@ -712,7 +1341,11 @@ get.pd.df <- function(var) {
          pred.var = var, 
          plot = FALSE,
          chull = TRUE, 
-         progress = FALSE) %>% 
+         progress = FALSE,
+         type = "classification",  # the type of model we have
+         which.class = 2,          # Pr(wm=1) is in the 2nd column of probs returned by ranger
+         grid.resolution = 100,
+         prob = getprob) %>% 
     # Rename the 1st column, which automatically gets the var's name, to predvar
     # Doing this to make it easier (later on) to pass this data frame to a wrapper plotting function
     dplyr::rename_with(~ "predvar", .cols = all_of(var))
@@ -726,7 +1359,7 @@ my.pdp.plot <- function(var) {
   # Returns:
   #  a ggplot representation of the pdp
   
-  pd <- get.pd.df(var)
+  pd <- get.pd.df(var, getprob = T)
   
   ggplot(pd, aes(x = predvar, y = yhat)) +
   geom_line(color = "orange", linewidth = 1) +
@@ -757,6 +1390,8 @@ p1 + p2 + p3 + p4 + p5 + p6 + p7 + plot_layout(ncol = 3, axis_titles = "collect"
 
 
 #### Logit scale
+In the partial dependence function, the values are on a centered logit scale, a scale similar to the logit.
+
 ```{r sel-RF-model-pdp-logit-scale, dependson='variable-importance-plot', fig.cap='Partial dependence plots for the VSURF-selected variables used in fitting a random forest model for predicting white mold in snap bean. The y-axis is on the logit scale.'}
 my.pdp.plot.logit <- function(var) {
   # Partial dependence plot on the logit scale
@@ -765,18 +1400,13 @@ my.pdp.plot.logit <- function(var) {
   # Returns:
   #  a ggplot representation of the pdp
   
-  pd <- get.pd.df(var)
+  pd <- get.pd.df(var, getprob = FALSE)
 
-  # Convert probabilities to logits:
-  # pd$yhat <- log(pd$yhat / (1 - pd$yhat))
-  # Can use qlogis function, which does the same:
-  pd$yhat <- qlogis(pd$yhat)
-  
   ggplot(pd, aes(x = predvar, y = yhat)) +
   geom_line(color = "orange", linewidth = 1) +
   geom_rug(color = "grey50", alpha = 0.5, sides = "l") +
   labs(x = wm_vip_labels[var],
-       y = "logit(prob)") +
+       y = "Centered logit") +
   theme_minimal() +
   theme(panel.grid.major = element_line(color = "gray90"),
         panel.grid.minor = element_line(color = "gray95"),
@@ -805,10 +1435,14 @@ p1 + p2 + p3 + p4 + p5 + p6 + p7 + plot_layout(ncol = 3, axis_titles = "collect"
 Estimate the interaction between any two features, which tells us how strongly two specific features interact with each other in the model.
 
 #### H-statistics
-The variable with the strongest interaction signal is `mean volumetric soil water content from 40-49 dap`, closely followed by `t2m_mean_to_4dap`.
+The variable with the strongest interaction signal is `the soil temperature to volumetric soil water content from 35 to 44 dap` (stsm_35dap_to_44dap). 
 
 ```{r sel-RF-model-H-statistic, results='hide', message=FALSE, fig.cap='H-statistic for interactions among the variables in a random forest model for forecasting white mold in snap bean.'}
-interact <- iml::Interaction$new(components_iml)
+# Set the seed for reproducibility and increase the grid size from the default. The interactions are not strong, and without the seed set, there is variability in the results.  The increased grid size also helps mitigate against the variability. 
+set.seed(456)
+tictoc::tic()
+interact <- iml::Interaction$new(components_iml, grid.size = 100)
+tictoc::toc()  # ~ 11 sec
 
 # Only 7 rows of course, as there are only 7 vars:
 iml.inter.results <- interact$results
@@ -832,15 +1466,20 @@ iml.inter.results %>%
   theme_minimal() +
   scale_x_continuous(name = "Overall interaction strength", limits = c(0, 0.35)) + 
   theme(axis.title.x = element_text(face = "bold", size = 11))
+
+
+# Highest:
+# stsm_35dap_to_44dap
 ```
 
-#### sm_40dap_to_49dap {.tabset .tabset-fade .tabset-pills}
-Now we look at the interaction between `mean volumetric soil water content from 40-49 dap` (= `sm_40dap_to_49dap`) and all other features, which tells us how strongly (in total) `sm_40dap_to_49dap` interacts in the model with all the other features.
+#### stsm_35dap_to_44dap {.tabset .tabset-fade .tabset-pills}
 
-We see that `sm_40dap_to_49dap` interacts mostly with `rainto35dap` and `sm_5dap_to_15dap`.
+Now we look at the interaction between `stsm_35dap_to_44dap` and all other features, which tells us how strongly (in total) `stsm_35dap_to_44dap` interacts in the model with all the other features.
 
-```{r sm-40dap-to-49dap-interactions, message=FALSE}
-interact_2way <- iml::Interaction$new(components_iml, feature = "sm_40dap_to_49dap")
+We see that `stsm_35dap_to_44dap` interacts mostly with `sm_5dap_to_15dap` and `rainto35dap`.
+
+```{r stsm-35dap-to-44dap-interactions, message=FALSE}
+interact_2way <- iml::Interaction$new(components_iml, feature = "stsm_35dap_to_44dap")
 
 interact_2way$results %>% 
   dplyr::arrange(desc(.interaction)) %>% 
@@ -848,41 +1487,12 @@ interact_2way$results %>%
 ```
 
 
-##### sm_40dap_to_49dap and rainto35dap
-```{r two-way-pdp-sm-40dap-to-49dap-and-rainto35dap}
-# Two-way PDP using iml:
-interaction_pdp_II <- iml::FeatureEffect$new(
-  components_iml, 
-  c("rainto35dap", "sm_40dap_to_49dap"), 
-  method = "pdp",
-  grid.size = 30
-) 
-
-
-wireframe(.value ~ rainto35dap*sm_40dap_to_49dap, 
-          data = interaction_pdp_II$results,
-          # Adjust the size of the axis labels:
-          xlab = list(cex = .7),
-          ylab = list(cex = .7),
-          zlab = list(label = "Pr(wm)", cex = 0.7),
-          main = NULL,
-          drape = TRUE,
-          colorkey = TRUE,
-          screen = list(z = -60, x = -60),
-          # Change tick label size on the x, y, z axes:
-          scales = list(arrows = FALSE, x = list(cex = .5), 
-                        y = list(cex = .5), z = list(cex = 0.5)),
-          # Change the tick label size on the legend:
-          par.settings = list(axis.text = list(cex = 0.5))
-          )
-```
-
-##### sm_40dap_to_49dap and sm_5dap_to_15dap
-```{r two-way-pdp-sm-40dap-to-49dap-and-sm-5dap-to-15dap}
+##### sm_5dap_to_15dap and stsm_35dap_to_44dap
+```{r two-way-pdp-sm-5dap-to-15dap-and-sm-5dap-to-15dap}
 # Two-way PDP using iml:
 interaction_pdp <- iml::FeatureEffect$new(
   components_iml, 
-  c("sm_5dap_to_15dap", "sm_40dap_to_49dap"), 
+  c("sm_5dap_to_15dap", "stsm_35dap_to_44dap"), 
   method = "pdp",
   grid.size = 30
 ) 
@@ -893,50 +1503,8 @@ interaction_pdp <- iml::FeatureEffect$new(
 # A wireframe plot is more informative:
 # See: https://www.stat.math.ethz.ch/pipermail/r-help/2009-August/400463.html
 # for how to make adjustments to the tick, axis and legend labels.
-wireframe(.value ~ sm_5dap_to_15dap*sm_40dap_to_49dap, 
+wireframe(.value ~ sm_5dap_to_15dap*stsm_35dap_to_44dap, 
           data = interaction_pdp$results,
-          # Adjust the size of the axis labels:
-          xlab = list(cex = .7),
-          ylab = list(cex = .7),
-          zlab = list(label = "Pr(wm)", cex = 0.7),
-          main = NULL,
-          drape = TRUE,
-          colorkey = TRUE,
-          screen = list(z = -60, x = -60),
-          # Change tick label size on the x, y, z axes:
-          scales = list(arrows = FALSE, x = list(cex = .5), 
-                        y = list(cex = .5), z = list(cex = 0.5)),
-          # Change the tick label size on the legend:
-          par.settings = list(axis.text = list(cex = 0.5))
-          )
-```
-
-
-#### t2m_mean_to_4dap {.tabset .tabset-fade .tabset-pills}
-
-`t2m_mean_to_4dap` interacts mostly with `sm_5dap_to_15dap`.
-
-```{r t2m-mean-to-4dap-interactions}
-interact_2way <- iml::Interaction$new(components_iml, feature = "t2m_mean_to_4dap")
-
-interact_2way$results %>% 
-  dplyr::arrange(desc(.interaction)) %>% 
-  make_kable()
-```
-
-##### t2m_mean_to_4dap and sm_5dap_to_15dap
-```{r two-way-pdp-t2m-mean-to-4dap-and-sm-5dap-to-15dap}
-# Two-way PDP using iml:
-interaction_pdp_II <- iml::FeatureEffect$new(
-  components_iml, 
-  c("t2m_mean_to_4dap", "sm_5dap_to_15dap"), 
-  method = "pdp",
-  grid.size = 30
-) 
-
-
-wireframe(.value ~ t2m_mean_to_4dap*sm_5dap_to_15dap, 
-          data = interaction_pdp_II$results,
           # Adjust the size of the axis labels:
           xlab = list(cex = .7),
           ylab = list(cex = .7),
@@ -956,7 +1524,7 @@ wireframe(.value ~ t2m_mean_to_4dap*sm_5dap_to_15dap,
 
 
 ### SHAP – (SHapley Additive exPlanations) {.tabset .tabset-fade .tabset-pills}
-```{r SHAP-setup, results='hide'}
+```{r SHAP-setup, results='hide', eval=FALSE}
 # Select background data. 
 # Approach 1
 #  Because of the imbalance in the data, create a subsample which consists of all wm(1) obs, plus 127 wm(0) obs, to give a sample of 200 rows:
@@ -973,13 +1541,24 @@ wireframe(.value ~ t2m_mean_to_4dap*sm_5dap_to_15dap,
 
 # Approach 2 (which we use here)
 # Using all the data:
-tic()
-ps <- kernelshap::permshap(m2, X.sel[-8], bg_X = X.sel)
-toc() # ~ 96 sec
+tictoc::tic()
+# ps <- kernelshap::permshap(m2, X.sel[-8], bg_X = X.sel)  # wm is in the 8th column
+# Setting it up this way, to keep the wm variable for labelling dependence plots later
+ps <- kernelshap::permshap(m2, X.sel, bg_X = X.sel, feature_names = names(X.sel))
+tictoc::toc() # ~ 214 sec
 
 # Create the viz object:
 sv <- shapviz(ps)
+
+# Save the object to avoid having to repeat recreating the sv object:
+save(sv, file = here::here("Modeling", "shapvis.RData"))
 ```
+
+
+```{r SHAP-load-shapvis-object}
+load(here::here("Modeling", "shapvis.RData"))  # sv
+```
+
 
 
 #### SHAP Importance Plots
@@ -988,27 +1567,40 @@ A beeswarm plot (sometimes called "SHAP summary plot").
 The features are sorted in decreasing order of importance.
 ```{r SHAP-Importance, dependson='sel-RF-model-vip', fig.cap='Permutation-based SHAP summary plot depicting the contributions of variables in a random forest model to the prediction of white mold in snap bean.'}
 # wm_vip_labels is defined in chunk `sel-RF-model-vip`
-# With all 356 data points, the beeswarm plot can look too cluttered, can't tell much. So set a transparency via alpha = 0.5 and smaller points:
-sv_importance(sv, kind = "bee", alpha = 1, size = 1) +
+# With all 356 data points, the beeswarm plot can look too cluttered, can't tell much. So set a transparency via alpha = 0.5 and smaller points.
+
+# We need some further manipulations so that the plot does not include a row for wm. 
+# sv is a list of two: 0 and 1. We want the values under 1 corresponding to wm=1
+# The list under 1 consists of two parts: S (matrix format), X (dataframe)
+# We need to remove the wm parts from S and X.
+# Make and work with a copy of sv:
+sv.mod <- sv
+
+sv.mod[["1"]]$S <- sv.mod[["1"]]$S[, -8]  # because S is a matrix
+sv.mod[["1"]]$X <- sv.mod[["1"]]$X[-8]    # because X is a dataframe
+
+sv_importance(sv.mod[["1"]], kind = "bee", alpha = 1, size = 1) +
   scale_y_discrete(labels = wm_vip_labels, name = NULL) +
   scale_color_gradient(low ="#1e88e5ff", high = "#ff0d57ff",limits =c(0,1),
                        breaks = c(0, 1), labels = c(" Low", "High "),
                        guide = guide_colorbar(barwidth = 0.3,barheight =15 ))+
   cowplot::theme_half_open(font_size = 12)
-ggsave("figs/shap_beeswarm.png", dpi = 600, height = 4, width = 7, bg = "white")
+ggsave("figs/shap_beeswarm.png", dpi = 600, height = 5, width = 7, bg = "white")
+ggsave("figs/shap_beeswarm.pdf", dpi = 600, height = 5, width = 7, bg = "white")
+
 ```
 
 
 #### SHAP Dependence Plot {.tabset .tabset-fade .tabset-pills}
 We focus here on pure main effects
 
-```{r SHAP-Dependence-setup}
+```{r SHAP-Dependence-setup-original, eval=FALSE}
 # Reminder of the features:
 # names(X.sel)
 
 # Examples:
-# sv_dependence(sv, v = "sm_40dap_to_49dap", color_var = "stsm_35dap_to_44dap")
-# sv_dependence(sv, v = "sm_40dap_to_49dap", color_var = "rainto35dap")
+# sv_dependence(sv[["1"]], v = "sm_40dap_to_49dap", color_var = "stsm_35dap_to_44dap")
+# sv_dependence(sv[["1"]], v = "sm_40dap_to_49dap", color_var = "rainto35dap")
 
 # A wrapper function to do a main dependence plot (no interactions shown)
 my_dependence_fxn <- function(i) {
@@ -1017,7 +1609,7 @@ my_dependence_fxn <- function(i) {
   # Returns:
   #  an edited dependence plot
   
-  sv_dependence(sv, selected_vars[i], color_var = NULL, color = "orange", size=1) +
+  sv_dependence(sv[["1"]], selected_vars[i], color_var = NULL, color = "orange", size=1) +
   geom_smooth(method = "loess", formula = 'y ~ x', se = FALSE) +
   xlab(wm_vip_labels[selected_vars[i]]) + 
   theme_bw() +
@@ -1031,7 +1623,45 @@ my_dependence_fxn <- function(i) {
 ```
 
 
-```{r SHAP-Dependence-plots, fig.cap='Main effects SHAP dependednce plots for the seven predictors in a random forest model for white mold in snap bean.', fig.height=8.0}
+```{r SHAP-Dependence-setup-revised}
+# The main goal is to color the points in the plot by wm status (i.e., use separate colors for the wm=0 and wm=1 groups)
+
+# The best way to do this was to extract the relevant parts out of sv and create a tibble that can be passed directly into ggplot.
+
+my_dependence_fxn <- function(i) {
+  # Args:
+  #  i = numeric index 1-7 to pull out a var from the respective vector
+  # Returns:
+  #  an edited dependence plot
+  
+  # Define a colorblind-friendly palette
+  cbPalette <- c("#999999", "#E69F00")  # Two colors for binary factor levels
+  
+  foo <- tibble(x = sv[["1"]]$X[, i], y = sv[["1"]]$S[, i], wm = sv[["1"]]$X[, 8])
+  
+  ggplot(data = foo, aes(x = x, y = y, color = wm)) +
+    geom_point(size = 1) +  
+    # Single smooth line
+    geom_smooth(method = "loess", formula = 'y ~ x', se = FALSE, 
+                color = "blue1", aes(group = 1)) +  
+    # Apply colorblind-friendly palette
+    scale_color_manual(values = cbPalette) +  
+    theme_bw() +
+    xlab(wm_vip_labels[selected_vars[i]]) + 
+    ylab("SHAP value") +
+    theme_bw() +
+    theme(axis.title.y = element_text(face = "bold", size = 8)) +
+    theme(
+      axis.text.x = element_text(size = 7),  # Decrease x-axis tick label size
+      axis.text.y = element_text(size = 7)  # Decrease y-axis tick label size
+    ) +
+    theme(axis.title.x = element_text(face = "bold", size = 8)) 
+}
+```
+
+
+
+```{r SHAP-Dependence-plots, fig.cap='Main effects SHAP dependence plots for the seven predictors in a random forest model for white mold in snap bean.', fig.height=8.0}
 p1 <- my_dependence_fxn(1)
 p2 <- my_dependence_fxn(2)
 p3 <- my_dependence_fxn(3)
@@ -1040,59 +1670,51 @@ p5 <- my_dependence_fxn(5)
 p6 <- my_dependence_fxn(6)
 p7 <- my_dependence_fxn(7)
 
-p1 + p2 + p3 + p4 + p5 + p6 + p7 +
-  plot_annotation(tag_levels = 'A') +
-  plot_layout(nrow = 4, byrow = T) + 
-  plot_layout(axis_titles = "collect")
+# This places the legend guide in the unoccupied panel
+(p1 + p2 + p3 + p4 + p5 + p6 + p7 + guide_area()) +
+  plot_annotation(tag_levels = "A") +
+  plot_layout(ncol = 2, byrow = TRUE, guides = "collect", axis_titles = "collect") & 
+  theme(legend.position = "bottom", 
+        legend.direction = "horizontal")
 ```
 
 
-# Prediction
+# Prediction {.tabset .tabset-fade .tabset-pills}
 We now turn to logistic regression to build a model.
 
-As the SHAP plots indicate nonlinearity in the feature contributions, we'll model the features using restricted cubic splines. This will be done via the `rms` package.
+## LR model I {.tabset .tabset-fade .tabset-pills}
 
-Restrict to the top 3 predictors:
-
-  - t2m_mean_to_4dap
-  - sm_40dap_to_49dap
-  - rain36to50dap
-
-Conduct an internal validation, as all the data will be used for model building (as we don't have much data or wm cases, it's wasteful not to use all the data to build the model).  Internal validation will correct for optimism in the model build.
-
-<!-- Maybe some model stability plots. -->
-<!-- See the packages: -->
-<!-- - pmcalibration -->
-<!-- - Stephen Rhodes' pminternal package for internal validation https://github.com/stephenrho/pminternal  You have to download it from GitHub (already did so) -->
-
-
-```{r LR-prep, message=FALSE}
-rm(list = ls()[!(ls() %in% c("X.sel", "make_kable"))])
-
-# Will be making use of the following packages:
-library(rms)
-library(CalibrationCurves)
-library(R.devices)  # suppressGraphics function to suppress the automatic outputting of a plot 
-                    # by the CalibrationCurves::val.prob.ci.2 function
+  - Predictors represented in the model as-is
+  - No representation as restricted cubic splines (to account for nonlinearities in the logit)
+  - No penalization
+  
+```{r LRI-prep, message=FALSE}
+load(here::here("Modeling", "rf_tuned_sel.RData"))  # rf.tuned.sel, X.sel, selected_vars 
+# rm(list = ls()[!(ls() %in% c("X.sel", "make_kable"))])
 ```
 
-
-```{r LR-data-and-model-prep, results='hide'}
-# Create a data frame copy of the dataset (to add predictions to later in the chunk DCA-setup):
-X <- as.data.frame(X.sel)
+```{r LRI-data-and-model-prep, results='hide'}
+# Makes life easier to have wm as a numeric (0,1) instead of as a factor:
+X.sel <- 
+  X.sel %>% 
+  dplyr::mutate(wm = as.numeric(wm)-1)
 
 # Create a datadist object
 dd <- rms::datadist(X.sel)
 
 options(datadist = "dd")
 
-# fmla <- as.formula("wm ~ rcs(t2m_mean_to_4dap, 3) + rcs(sm_40dap_to_49dap, 3) + rcs(rain36to50dap, 3)")
-
 fmla <- formula(paste("wm", "~", 
-                      paste(c("rcs(t2m_mean_to_4dap, 3)",
-                              "rcs(sm_40dap_to_49dap, 3)",
-                              "rcs(rain36to50dap, 3)"), 
+                      paste(c("sm_40dap_to_49dap",
+                              "t2m_mean_to_4dap",
+                              "stsm_35dap_to_44dap",
+                              "sm_5dap_to_15dap", 
+                              "log_silt_clay", 
+                              "rainto35dap", 
+                              "rain36to50dap"),
                             collapse = "+")))
+
+
 
 # NOTE: getting this warning message, and have not been able to solve it. 
 # From what I read, this is a software bug. Therefore, I am wrapping the code in suppressWarnings...
@@ -1132,24 +1754,29 @@ calPerf <- suppressGraphics({
 })
 
 
-# Get set up for using `pminternal`.  See the file Troubleshooting.R for more details. Basically, to avoid error messages and conflicts, we (i) do not load `pminternal`, (ii) write custom model fitting and predict functions.
+# Get set up for using the `pminternal` package.  See the file Troubleshooting.R for more details. Basically, to avoid error messages and conflicts, we (i) do not load `pminternal`, (ii) write custom model fitting and predict functions.
 model_fun <- function(data, ...) {
-  glm(wm ~ rms::rcs(t2m_mean_to_4dap, 3) + 
-        rms::rcs(sm_40dap_to_49dap, 3) + 
-        rms::rcs(rain36to50dap, 3), 
+  glm(wm ~ 
+        sm_40dap_to_49dap +
+        t2m_mean_to_4dap +
+        stsm_35dap_to_44dap +
+        sm_5dap_to_15dap +
+        log_silt_clay +
+        rainto35dap +
+        rain36to50dap, 
       data = data, family = "binomial")
-  }
+}
+
 
 pred_fun <- function(model, data, ...) {
   predict(model, newdata = data, type = "response")
 }
 
-
 # for calibration plot:
 eval <- seq(min(pred), max(pred), length.out = 200)
-library(pminternal)
-# to dowload this package use devtools::install_github("stephenrho/pminternal", build_vignettes = TRUE)
+
 set.seed(2022)
+# Takes ~ 32 sec
 mod_iv <- pminternal::validate(method = "boot_optimism", 
                                data = X.sel, 
                                outcome = "wm", 
@@ -1162,27 +1789,50 @@ mod_iv <- pminternal::validate(method = "boot_optimism",
 ```
 
 
-## Fitted model formula
+### Model summary
+```{r LRI-model-summary}
+# Model summary:
+print(M0, coef = T)
+```
+
+
+### Fitted model formula
 Output a function for obtaining predictions on the logit sale from the fitted LR model.
 
-```{r LR-model-fitted-function}
+```{r LRI-model-fitted-function}
 Function(M0)
 ```
 
 
-
-## Model fit statistics {.tabset .tabset-fade .tabset-pills}
+### Model fit statistics {.tabset .tabset-fade .tabset-pills}
 We'll focus on statistics that Riley and colleagues have suggested should be reported for logistic regression models. 
 
-### Max Cox-Snell and LR
-```{r LR-maxCSapp-LR}
+#### No. predictor variables
+```{r LRI-num-predictors}
+length(M0$Design$name) %>% 
+  make_kable(col.names = "No. predictors")
+```
+
+#### No. predictor parameters
+```{r LRI-num-pred-params}
+as.vector(M0$stats["d.f."]) %>% 
+  make_kable(col.names = "No. predictor params")
+```
+
+#### Events per predictor param
+```{r LRI-EPP}
+(sum(M0$y)/as.vector(M0$stats["d.f."])) %>% 
+  make_kable(col.names = "EPP")
+```
+
+#### Max Cox-Snell and LR
+```{r LRI-maxCSapp-LR}
 tibble::tibble(`Max Cox-Snell (app)` = Max_CS_app, `Likelihood ratio` = LR) %>% 
   make_kable()
 ```
 
-
-### Nagelkerke
-```{r LR-Nagelkerke}
+#### Nagelkerke
+```{r LRI-Nagelkerke}
 Nagelkerke <- as.vector(M0$stats["R2"])
 
 # Bootstrap CI for Nagelkerke R2:
@@ -1222,8 +1872,8 @@ res_Nagelkerke %>%
                      "Internal" = 3))
 ```
 
-### Cox-Snell
-```{r LR-Cox-Snell}
+#### Cox-Snell
+```{r LRI-Cox-Snell}
 # CS_app = Apparent estimate of the Cox-Snell statistic:
 # Point estimate and 95% CI bounds:
 CS_app <- c(Nagelkerke, Nagelkerke.LL, Nagelkerke.UL)*Max_CS_app
@@ -1254,9 +1904,8 @@ res_CS %>%
                      "Internal" = 3))
 ```
 
-
-### Brier score
-```{r LR-Brier}
+#### Brier score
+```{r LRI-Brier}
 # Brier score:
 Brier <- as.vector(M0$stats["Brier"])
 # Bootstrap CI for Brier score:
@@ -1296,10 +1945,9 @@ res_Brier %>%
                      "Internal" = 3))
 ```
 
-
-### Calibration intercept
+#### Calibration intercept
 Also called Calibration-in-the-large
-```{r LR-calibration-intercept}
+```{r LRI-calibration-intercept}
 Ccurves_app <- calPerf$Calibration$Intercept
 
 # Corrected for optimism:
@@ -1334,9 +1982,8 @@ res_cil %>%
                      "Internal" = 3))
 ```
 
-
-### Calibration slope
-```{r LR-calibration-slope}
+#### Calibration slope
+```{r LRI-calibration-slope}
 # Via the CalibrationCurves package:
 CC_slope_app <- calPerf$Calibration$Slope
 
@@ -1364,24 +2011,21 @@ res_weak_cal %>%
   add_header_above(c(" " = 1, "Apparent" = 3, "Internal" = 3))
 ```
 
-
-### Calibration plot
+#### Calibration plot
 Logistic regression models are typically well-calibrated on the development data; and we see aspects of that here.
 
-However, the model does have some issues. Very low and high risks are overestimated. Intermediate risks are underestimated. 
+However, the model does have some issues. 
 
-```{r LR-Calibration-plots-via-CalibrationCurves, results='hide', fig.cap='Calibration plot for a logistic regression model for predicting the presence of white mold in snap bean.'}
+```{r LRI-Calibration-plots-via-CalibrationCurves, results='hide', fig.cap='Calibration plot for a logistic regression model for predicting the presence of white mold in snap bean.'}
 # Using ggplot2:
-calib_plot_gg = valProbggplot(pred, X.sel$wm)
-calib_plot_gg$ggPlot+
-  cowplot::theme_half_open(font_size = 12)+
-  theme(legend.position = "bottom")
-ggsave("figs/calibration_plot.png", dpi = 600, height = 4, width = 5, bg = "white" )
+LR1CC <- CalibrationCurves::valProbggplot(pred, X.sel$wm)$ggPlot
+
+LR1CC
 ```
 
-### Predicted probabilities
+#### Predicted probabilities
 
-```{r LR-histogram-pred-probs, fig.cap='Histogram of fitted probabilities for a logistic regression model fit to a subset of predictors identified by the VSURF algorithm.'}
+```{r LRI-histogram-pred-probs, fig.cap='Histogram of fitted probabilities for a logistic regression model fit to a subset of predictors identified by the VSURF algorithm.'}
 tibble::tibble(response = pred, truth = X.sel$wm) %>%
   ggplot(aes(response)) +
   geom_histogram(fill = "orange", col = "orange3", bins = 20) +
@@ -1393,9 +2037,9 @@ tibble::tibble(response = pred, truth = X.sel$wm) %>%
 ```
 
 
-### ICI {.tabset .tabset-fade .tabset-pills}
-#### Apparent
-```{r LR-ICI-apparent-with-CalibrationCurves, eval=FALSE}
+#### ICI {.tabset .tabset-fade .tabset-pills}
+##### Apparent
+```{r LRI-ICI-apparent-with-CalibrationCurves, eval=FALSE}
 # As a background check:
 # Get the apparent estimate using CalibrationCurves, which generates a flexible calibration curve based on loess as the default.
 
@@ -1406,7 +2050,738 @@ calPerf$stats["Eavg"]
 The calculations are done by hand, making heavy use of code by Daniele Giardiello.
 A CI for the estimate of the apparent ICI is calculated via bootstrap.  Complicated enough as it is. No internal validation (correction for optimism) here; better (easier) obtained with `pminternal`. 
 
-```{r LR-Calibration-measures-ICI-E50-E90-by-hand}
+```{r LRI-Calibration-measures-ICI-E50-E90-by-hand}
+# Calibration measures ICI, E50, E90 based on secondary logistic regression
+# Create a copy of the X.sel data frame, with pred added as a column:
+Xmod <-
+  X.sel %>% 
+  dplyr::mutate(pred = pred)
+
+# Use loess to fit the flexible calibration curve:
+fit_cal <- loess(wm ~ pred, 
+                 data = Xmod, 
+                 span = 0.75, 
+                 degree = 2, 
+                 family = "gaussian")
+
+cal_obs <- predict(fit_cal)
+
+dt_cal <- 
+  cbind.data.frame(
+    "obs" = cal_obs,
+    "pred" = pred)
+
+
+res_calmeas <-
+  c(
+    "ICI" = mean(abs(dt_cal$obs - dt_cal$pred)),
+    "E50" = median(abs(dt_cal$obs - dt_cal$pred)),
+    "E90" = unname(quantile(abs(dt_cal$obs - dt_cal$pred), 
+                            probs = .90))
+)
+
+
+## Bootstrap confidence intervals for the calibration  measures (ICI, E50, E90)
+alpha <- .05
+# Set B = 2000 although it takes more time:
+B <- 2000 
+set.seed(2022)
+# Using stratification on wm because of the imbalance between the classes:
+vboot <- rsample::bootstraps(X.sel, times = B, strata = wm)
+
+# Bootstrap calibration measures
+numsum_boot <- function(split) {
+  
+  pred <- suppressWarnings(predict(M0,
+                  type = "fitted.ind",
+                  newdata = rsample::analysis(split)
+                  ) )
+
+  v_cal <- loess(wm ~ pred, 
+                 data = rsample::analysis(split), 
+                 span = 0.75, 
+                 degree = 2, 
+                 family = "gaussian")
+
+  cal_obs_boot <- predict(v_cal)
+  
+  # Save objects needed
+  db_cal_boot <- data.frame(
+    "obs" = cal_obs_boot,
+    "pred" = pred
+    )
+  
+  absdiff_boot <- abs(db_cal_boot$obs - db_cal_boot$pred)
+
+  res_cal_boot <- data.frame(
+    "ICI" = mean(absdiff_boot),
+    "E50" = quantile(absdiff_boot, probs = .5),
+    "E90" = quantile(absdiff_boot, probs = .9)
+  )
+  }  # end of function
+
+# Example of use:
+# (bar <- purrr::pluck(vboot, "splits", 1) %>% numsum_boot())
+
+tictoc::tic()
+numsum_b <- 
+  vboot %>% 
+  dplyr::mutate(num_cal_boot = purrr::map(splits, numsum_boot),
+                
+                ICI = purrr::map_dbl(num_cal_boot, ~ .x$ICI),
+         
+                E50 = purrr::map_dbl(num_cal_boot, ~ .x$E50),
+         
+                E90 = purrr::map_dbl(num_cal_boot, ~ .x$E90)
+         )
+
+tictoc::toc()  # 9 sec
+
+# numsum_b is a tibble with 2,000 rows
+# Now we need to process the results to get the bootstrap CIs:
+alpha <- .05
+res_numcal <- matrix(c(res_calmeas["ICI"],
+                       quantile(numsum_b$ICI, probs = alpha / 2),
+                       quantile(numsum_b$ICI, 
+                                probs = 1 - alpha / 2),
+                       
+                       res_calmeas["E50"],
+                       quantile(numsum_b$E50, probs = alpha / 2),
+                       quantile(numsum_b$E50, probs = 1 - alpha / 2),
+                       
+                       res_calmeas["E90"],
+                       quantile(numsum_b$E90, probs = alpha / 2),
+                       quantile(numsum_b$E90, probs = 1 - alpha / 2)
+                       ),
+                     nrow = 1,
+                     ncol = 9,
+                     byrow = T,
+                     dimnames = list(
+                       c("Apparent"),
+                       rep(
+                         c("Estimate", "Lower.95", "Upper.95"),
+                         3))
+)
+
+
+# Present the results:
+res_numcal %>% 
+  make_kable()  %>% 
+  add_header_above(c(" " = 1,  
+                     "ICI" = 3, 
+                     "E50" = 3,
+                     "E90" = 3))
+```
+
+
+##### Internal validation
+```{r LRI-Calibration-measures-ICI-E50-E90-with-pminternal}
+# ICI adjusted for optimism:
+
+# oc = optimism-corrected
+optsum <-
+  c(
+    ICI.app = summary(mod_iv)["Apparent", "Eavg"],
+    ICI.oc = summary(mod_iv)["Corrected", "Eavg"],
+    E50.app = summary(mod_iv)["Apparent", "E50"],
+    E50.oc = summary(mod_iv)["Corrected", "E50"],
+    E90.app = summary(mod_iv)["Apparent", "E90"],
+    E90.oc = summary(mod_iv)["Corrected", "E90"]
+    )
+
+res_optcal <- matrix(c(optsum["ICI.app"],
+                       optsum["ICI.oc"],
+                       
+                       optsum["E50.app"],
+                       optsum["E50.oc"],
+                       
+                       optsum["E90.app"],
+                       optsum["E90.oc"]
+                       ),
+                     nrow = 1,
+                     ncol = 6,
+                     byrow = T,
+                     dimnames = list(
+                       c("Value"),
+                       rep(c("Apparent", "Corrected"), 3))
+                     )
+
+# Present the results:
+res_optcal %>% 
+  make_kable()  %>% 
+  add_header_above(c(" " = 1,  
+                     "ICI" = 2, 
+                     "E50" = 2,
+                     "E90" = 2))
+```
+
+
+
+#### C-statistic
+Equivalent to the AUROC in the logistic regression model setting.
+
+The CI is a bit wide, as would be expected for a small dataset. Correction for optimism still indicates a good model (at least by this measure).
+```{r LRI-C-statistic}
+# With rms::bootcov
+# C-statistic (apparent)
+# as.vector(M0$stats["C"])
+
+# Bootstrap CI for the C-statistic:
+g <- rms::bootcov(M0, stat = 'C', seed = 4, B = 1000)
+# The CI limits:
+g.quan <- quantile(g$boot.stats, c(.025, .975))
+# Lower CI bound:
+# g.quan[1]
+# Upper CI bound:
+# g.quan[2]
+
+# Optimism-corrected:
+# The 1st row in M0.boot is Dxy, which is Somer's D. It is a transformed version of the C-statistic
+C_adj <- 0.5*(M0.boot[1, 5] + 1)
+
+res_C <- matrix(c(as.vector(M0$stats["C"]),
+                  g.quan[1],
+                  g.quan[2],
+                  C_adj,
+                  NA,
+                  NA
+                  ),
+                nrow = 1,
+                ncol = 6,
+                byrow = T,
+                dimnames = list(
+                  c(""),
+                  rep(c("Estimate", "Lower.95", "Upper.95"), 2))
+                )
+
+# Present the results:
+res_C %>% 
+  make_kable()  %>% 
+  add_header_above(c(" " = 1,  
+                     "Apparent" = 3, 
+                     "Internal" = 3
+                     )
+                   )
+```
+
+
+#### Se, Sp, YI
+```{r LRI-model-estimate-optimism, eval=FALSE}
+# 1. Prepare predictions dataframe:
+lr_pred <-
+  data.frame(truth = X.sel$wm, response = pred)
+
+# 2. Calculate apparent performance
+lr_apparent_perf <- calc_metrics_cutpointr(lr_pred)
+
+# 3. Bootstrap process
+fmla <- formula(paste("wm", "~", 
+                      paste(c("sm_40dap_to_49dap",
+                              "t2m_mean_to_4dap",
+                              "stsm_35dap_to_44dap",
+                              "sm_5dap_to_15dap", 
+                              "log_silt_clay", 
+                              "rainto35dap", 
+                              "rain36to50dap"),
+                            collapse = "+")))
+
+
+lr_boot_fxn <- function(i) {
+  # Print the current iteration
+  cat("Currently processing iteration: ", i, "\n")
+  
+  # a. Generate bootstrap sample
+  boot_sample <- rsample::bootstraps(X.sel, times = 1, strata = wm)$splits[[1]] %>%
+    rsample::analysis()
+  
+  # b. Fit model on bootstrap sample with error handling
+  boot_model <- tryCatch(
+    expr = {
+       rms::lrm(fmla, data = boot_sample, x = T, y = T)
+    },
+    error = function(e) {
+      cat("Error occurred in iteration", i, ":", e$message, "\n")
+      return(NULL) # Return NULL if an error occurs
+    }
+  )
+  
+  # If boot_model is NULL, skip this iteration
+  if (is.null(boot_model)) {
+    cat("Skipping iteration", i, "due to error.\n")
+    return(NULL)
+  }
+  
+  
+  # c. Calculate metrics on bootstrap sample (training performance)
+  suppressWarnings(boot_pred <- predict(boot_model, type = "fitted.ind"))
+  
+  boot_pred_df <- data.frame(truth = boot_sample$wm, response = boot_pred)
+  
+  train_perf <- calc_metrics_cutpointr(boot_pred_df)
+  
+  # d & e. Apply bootstrap model to original dataset and calculate metrics (test performance)
+  suppressWarnings(test_pred <- predict(boot_model, newdata = X.sel, type = "fitted.ind"))
+  
+  test_pred_df <- data.frame(truth = X.sel$wm, response = test_pred)
+  
+  test_perf <- calc_metrics_cutpointr(test_pred_df)
+  
+  # f. Calculate optimism
+  optimism <- purrr::map2_dbl(train_perf, test_perf, \(x, y) x-y)
+  
+  tibble(
+    iteration = i,
+    metric = names(train_perf),
+    train = unlist(train_perf),
+    test = unlist(test_perf),
+    optimism = optimism)
+  }
+
+
+# Run lr_boot_fxn in parallel:
+set.seed(178)
+my.seeds <- c(1:5000)
+
+plan(list(tweak(multisession, workers = 5), sequential))
+tictoc::tic()
+bootstrap_results <- 
+  furrr::future_map(my.seeds, lr_boot_fxn, .options = furrr_options(seed = TRUE)) %>% 
+  purrr::list_rbind()
+tictoc::toc()  # 43 sec
+
+plan(sequential)
+
+# 4. Apparent performance bootstrap confidence intervals
+lr_apparent_CI <-
+  bootstrap_results %>%
+  dplyr::group_by(metric) %>%
+  dplyr::summarize(app_LCI = quantile(train, .025), app_UCI = quantile(train, .975))
+
+
+# 5. Average optimism across all bootstrap samples
+avg_optimism <- 
+  bootstrap_results %>%
+  dplyr::group_by(metric) %>%
+  dplyr::summarize(avg_optimism = mean(optimism))
+
+# 6. Calculate optimism-corrected performance
+lr_corrected_perf <- 
+  tibble(
+    metric = names(lr_apparent_perf),
+    apparent = unlist(lr_apparent_perf)
+    ) %>%
+  dplyr::left_join(lr_apparent_CI, by = "metric") %>%
+  dplyr::left_join(avg_optimism, by = "metric") %>%
+  dplyr::mutate(corrected = apparent - avg_optimism)
+
+
+# Save the results:
+save(lr_pred, bootstrap_results, lr_apparent_perf, lr_corrected_perf, file = here::here("Modeling", "LRIoptimism.RData"))
+```
+
+
+```{r LRI-model-estimate-load-optimism-results}
+# lr_pred, bootstrap_results, lr_apparent_perf, lr_corrected_perf
+load(here::here("Modeling", "LRIoptimism.RData"))  
+
+lr_corrected_perf %>% 
+  make_kable()
+```
+
+
+
+
+
+## LR model II {.tabset .tabset-fade .tabset-pills}
+As the SHAP plots indicate nonlinearity in the feature contributions, we'll model the features using restricted cubic splines. This will be done via the `rms` package.
+
+Restrict to the top 4 predictors:
+
+  - t2m_mean_to_4dap
+  - sm_40dap_to_49dap
+  - stsm_35dap_to_44dap
+  - rain36to50dap
+
+Conduct an internal validation, as all the data will be used for model building (as we don't have much data or wm cases, it's wasteful not to use all the data to build the model).  Internal validation will correct for optimism in the model build.
+
+<!-- Maybe some model stability plots. -->
+<!-- See the packages: -->
+<!-- - pmcalibration -->
+<!-- - Stephen Rhodes' pminternal package for internal validation https://github.com/stephenrho/pminternal  You have to download it from GitHub (already did so) -->
+
+
+```{r LRII-prep, message=FALSE}
+load(here::here("Modeling", "rf_tuned_sel.RData"))  # rf.tuned.sel, X.sel, selected_vars 
+# rm(list = ls()[!(ls() %in% c("X.sel", "make_kable"))])
+```
+
+
+```{r LRII-data-and-model-prep, results='hide'}
+# Makes life easier to have wm as a numeric (0,1) instead of as a factor:
+X.sel <- 
+  X.sel %>% 
+  dplyr::mutate(wm = as.numeric(wm)-1)
+
+# Create a datadist object
+dd <- rms::datadist(X.sel)
+
+options(datadist = "dd")
+
+fmla <- formula(paste("wm", "~", 
+                      paste(c("rcs(t2m_mean_to_4dap, 3)",
+                              "rcs(sm_40dap_to_49dap, 3)",
+                              "rcs(stsm_35dap_to_44dap, 3)", 
+                              "rcs(rain36to50dap, 3)"),
+                            collapse = "+")))
+
+
+
+# NOTE: getting this warning message, and have not been able to solve it. 
+# From what I read, this is a software bug. Therefore, I am wrapping the code in suppressWarnings...
+# Warning message:
+# In formula.character(object, env = baseenv()) :
+#   Using formula(x) is deprecated when x is a character vector of length > 1.
+#   Consider formula(paste(x, collapse = " ")) instead.
+
+# Set x = T and y = T to be able to compute bootstraps later for assessing optimism:
+M0 <- rms::lrm(fmla, data = X.sel, x = T, y = T)
+
+suppressWarnings(pred <- predict(M0, type = "fitted.ind"))
+
+# No. obs:
+n <- as.vector(M0$stats["Obs"])
+
+# LR = Likelihood Ratio
+LR <- as.vector(M0$stats["Model L.R."])
+
+# Max CS_app:
+Max_CS_app <- as.vector(1 - exp(-M0$deviance[1]/n))
+
+# Model summary:
+print(M0, coef = T)
+
+# The no. of predictor parameters:
+as.vector(M0$stats["d.f."])
+
+## IF you have the original development data, you can adjust for optimism via bootstrapping:
+set.seed(2022)
+M0.boot <- rms::validate(M0, B = 1000)
+
+
+# Set up for model performance statistics via the CalibrationCurves package:
+calPerf <- suppressGraphics({
+  CalibrationCurves::val.prob.ci.2(pred, X.sel$wm)
+})
+
+
+# Get set up for using the `pminternal` package.  See the file Troubleshooting.R for more details. Basically, to avoid error messages and conflicts, we (i) do not load `pminternal`, (ii) write custom model fitting and predict functions.
+model_fun <- function(data, ...) {
+  glm(wm ~ rms::rcs(t2m_mean_to_4dap, 3) + 
+        rms::rcs(sm_40dap_to_49dap, 3) + 
+        rms::rcs(stsm_35dap_to_44dap, 3) +
+        rms::rcs(rain36to50dap, 3), 
+      data = data, family = "binomial")
+}
+
+
+pred_fun <- function(model, data, ...) {
+  predict(model, newdata = data, type = "response")
+}
+
+# for calibration plot:
+eval <- seq(min(pred), max(pred), length.out = 200)
+
+set.seed(2022)
+# Takes ~ 32 sec
+mod_iv <- pminternal::validate(method = "boot_optimism", 
+                               data = X.sel, 
+                               outcome = "wm", 
+                               model_fun = model_fun, 
+                               pred_fun = pred_fun, 
+                               B = 2000, 
+                               cores = 4,
+                               # Here we use loess:
+                               calib_args = list(smooth = "loess", eval = eval))
+```
+
+
+### Model summary
+```{r LRII-model-summary}
+# Model summary:
+print(M0, coef = T)
+```
+
+
+### Fitted model formula
+Output a function for obtaining predictions on the logit sale from the fitted LR model.
+
+```{r LRII-model-fitted-function}
+Function(M0)
+```
+
+
+
+### Model fit statistics {.tabset .tabset-fade .tabset-pills}
+We'll focus on statistics that Riley and colleagues have suggested should be reported for logistic regression models. 
+
+#### No. predictor variables
+```{r LRII-num-predictors}
+length(M0$Design$name) %>% 
+  make_kable(col.names = "No. predictors")
+```
+
+#### No. predictor parameters
+```{r LRII-num-pred-params}
+as.vector(M0$stats["d.f."]) %>% 
+  make_kable(col.names = "No. predictor params")
+```
+
+#### Events per predictor param
+```{r LRII-EPP}
+(sum(M0$y)/as.vector(M0$stats["d.f."])) %>% 
+  make_kable(col.names = "EPP")
+```
+
+#### Max Cox-Snell and LR
+```{r LRII-maxCSapp-LR}
+tibble::tibble(`Max Cox-Snell (app)` = Max_CS_app, `Likelihood ratio` = LR) %>% 
+  make_kable()
+```
+
+#### Nagelkerke
+```{r LRII-Nagelkerke}
+Nagelkerke <- as.vector(M0$stats["R2"])
+
+# Bootstrap CI for Nagelkerke R2:
+g <- rms::bootcov(M0, stat = 'R2', seed = 4, B = 1000)
+# The CI limits:
+g.quan <- quantile(g$boot.stats, c(.025, .975))
+# Lower CI bound:
+Nagelkerke.LL <- g.quan[1]
+# Upper CI bound:
+Nagelkerke.UL <- g.quan[2]
+
+# Internal validation: optimism-adjusted Nagelkerke's R2 from the bootstrap validation results:
+Nagelkerke_adj <- M0.boot[2, 5]
+
+res_Nagelkerke <- matrix(
+  c(Nagelkerke,
+    Nagelkerke.LL,
+    Nagelkerke.UL,
+    Nagelkerke_adj,
+    NA,
+    NA),
+  
+  nrow = 1,
+  ncol = 6,
+  byrow = T,
+  
+  dimnames = list(
+    c("Nagelkerke R2"),
+    rep(c("Estimate", "Lower .95 ", "Upper .95"), 2)
+  )
+)
+
+res_Nagelkerke %>% 
+  make_kable() %>% 
+  add_header_above(c(" " = 1, 
+                     "Apparent" = 3, 
+                     "Internal" = 3))
+```
+
+#### Cox-Snell
+```{r LRII-Cox-Snell}
+# CS_app = Apparent estimate of the Cox-Snell statistic:
+# Point estimate and 95% CI bounds:
+CS_app <- c(Nagelkerke, Nagelkerke.LL, Nagelkerke.UL)*Max_CS_app
+
+# Adjusted for optimism:
+CS_adj <- Nagelkerke_adj*Max_CS_app
+
+res_CS <- matrix(
+  c(CS_app,
+    CS_adj,
+    NA,
+    NA),
+  
+  nrow = 1,
+  ncol = 6,
+  byrow = T,
+  
+  dimnames = list(
+    c("Cox-Snell R2"),
+    rep(c("Estimate", "Lower .95 ", "Upper .95"), 2)
+  )
+)
+
+res_CS %>% 
+  make_kable() %>% 
+  add_header_above(c(" " = 1, 
+                     "Apparent" = 3, 
+                     "Internal" = 3))
+```
+
+#### Brier score
+```{r LRII-Brier}
+# Brier score:
+Brier <- as.vector(M0$stats["Brier"])
+# Bootstrap CI for Brier score:
+g <- rms::bootcov(M0, stat = 'Brier', seed = 4, B = 1000)
+# The CI limits:
+g.quan <- quantile(g$boot.stats, c(.025, .975))
+# Lower CI bound:
+Brier.LL <- g.quan[1]
+# Upper CI bound:
+Brier.UL <- g.quan[2]
+
+Brier_app <- c(Brier, Brier.LL, Brier.UL)
+
+# Adjusted for optimism via rms:
+Brier_adj <- M0.boot["B", "index.corrected"]
+
+res_Brier <- matrix(
+  c(Brier_app,
+    Brier_adj,
+    NA,
+    NA),
+  
+  nrow = 1,
+  ncol = 6,
+  byrow = T,
+  
+  dimnames = list(
+    c("Brier"),
+    rep(c("Estimate", "Lower .95 ", "Upper .95"), 2)
+  )
+)
+
+res_Brier %>% 
+  make_kable() %>% 
+  add_header_above(c(" " = 1, 
+                     "Apparent" = 3, 
+                     "Internal" = 3))
+```
+
+#### Calibration intercept
+Also called Calibration-in-the-large
+```{r LRII-calibration-intercept}
+Ccurves_app <- calPerf$Calibration$Intercept
+
+# Corrected for optimism:
+# summary(mod_iv)["Corrected", "Intercept"]
+
+
+res_cil <- matrix(c(
+  # From the CalibrationCurves package:
+  Ccurves_app["Point estimate"],
+  Ccurves_app["Lower confidence limit"],
+  Ccurves_app["Upper confidence limit"],
+  
+  # Corrected for optimism:
+  summary(mod_iv)["Corrected", "Intercept"],
+  NA,
+  NA
+  ),
+  nrow = 1,
+  ncol = 6, 
+  byrow = TRUE,
+  dimnames = list(
+    c("Calibration-in-the-large"),
+    rep(c("Estimate", "Lower .95 ", "Upper .95"), 2)
+  )
+)
+
+
+res_cil %>% 
+  make_kable() %>% 
+  add_header_above(c(" " = 1, 
+                     "Apparent" = 3, 
+                     "Internal" = 3))
+```
+
+#### Calibration slope
+```{r LRII-calibration-slope}
+# Via the CalibrationCurves package:
+CC_slope_app <- calPerf$Calibration$Slope
+
+
+# Table the results:
+res_weak_cal <- matrix(c(
+  CC_slope_app["Point estimate"],
+  CC_slope_app["Lower confidence limit.2.5 %"],
+  CC_slope_app["Upper confidence limit.97.5 %"],
+  # Adjusting for optimism:
+  summary(mod_iv)["Corrected", "Slope"],
+  NA,
+  NA
+  ),
+  nrow = 1,
+  ncol = 6, 
+  byrow = TRUE,
+  dimnames = list(
+    c("Calibration slope"),
+    rep(c("Estimate", "Lower .95 ", "Upper .95"), 2))
+)
+
+res_weak_cal %>% 
+  make_kable() %>% 
+  add_header_above(c(" " = 1, "Apparent" = 3, "Internal" = 3))
+```
+
+#### Calibration plot {.tabset .tabset-fade .tabset-pills}
+Logistic regression models are typically well-calibrated on the development data; and we see aspects of that here.
+
+However, the model does have some issues. Very low and high risks are overestimated. Intermediate risks are underestimated. 
+
+##### LRII model
+```{r LRII-Calibration-plots-via-CalibrationCurves, results='hide', fig.cap='Calibration plot for a logistic regression model for predicting the presence of white mold in snap bean.'}
+# Using ggplot2:
+LR2CC <- CalibrationCurves::valProbggplot(pred, X.sel$wm)$ggPlot
+
+LR2CC
+```
+
+##### Comparison to the LRI model
+```{r LRI-vs-LRII-Calibration-plots, fig.height=9.0}
+(LR1CC + LR2CC) +
+  plot_annotation(tag_levels = "A") +
+   plot_layout(nrow = 2, byrow = TRUE, guides = "collect") & 
+  cowplot::theme_half_open(font_size = 12) &
+  theme(legend.position = "bottom", 
+        legend.direction = "horizontal")
+ggsave("figs/LR_calibration_plot.png", dpi = 600, height = 7, width = 5, bg = "white" )
+ggsave("figs/LR_calibration_plot.pdf", dpi = 600, height = 7, width = 5, bg = "white" )
+```
+
+
+#### Predicted probabilities
+
+```{r LRII-histogram-pred-probs, fig.cap='Histogram of fitted probabilities for a logistic regression model fit to a subset of predictors identified by the VSURF algorithm.'}
+tibble::tibble(response = pred, truth = X.sel$wm) %>%
+  ggplot(aes(response)) +
+  geom_histogram(fill = "orange", col = "orange3", bins = 20) +
+  facet_wrap(~ as.factor(truth), ncol = 1, 
+             labeller = as_labeller(c("0" = "No White Mold", "1" = "White Mold Present"))) +
+  geom_rug(col = "blue", alpha = 0.5) + 
+  labs(x = "Probability estimate of white mold", y = "No. of fields") +
+  theme_bw()
+```
+
+
+#### ICI {.tabset .tabset-fade .tabset-pills}
+##### Apparent
+```{r LRII-ICI-apparent-with-CalibrationCurves, eval=FALSE}
+# As a background check:
+# Get the apparent estimate using CalibrationCurves, which generates a flexible calibration curve based on loess as the default.
+
+calPerf$stats["Eavg"]
+```
+
+
+The calculations are done by hand, making heavy use of code by Daniele Giardiello.
+A CI for the estimate of the apparent ICI is calculated via bootstrap.  Complicated enough as it is. No internal validation (correction for optimism) here; better (easier) obtained with `pminternal`. 
+
+```{r LRII-Calibration-measures-ICI-E50-E90-by-hand}
 # Calibration measures ICI, E50, E90 based on secondary logistic regression
 # Create a copy of the X.sel data frame, with pred added as a column:
 Xmod <-
@@ -1528,8 +2903,8 @@ res_numcal %>%
 ```
 
 
-#### Internal validation
-```{r LR-Calibration-measures-ICI-E50-E90-with-pminternal}
+##### Internal validation
+```{r LRII-Calibration-measures-ICI-E50-E90-with-pminternal}
 # ICI adjusted for optimism:
 
 # oc = optimism-corrected
@@ -1571,11 +2946,11 @@ res_optcal %>%
 
 
 
-### C-statistic
+#### C-statistic
 Equivalent to the AUROC in the logistic regression model setting.
 
 The CI is a bit wide, as would be expected for a small dataset. Correction for optimism still indicates a good model (at least by this measure).
-```{r LR-C-statistic}
+```{r LRII-C-statistic}
 # With rms::bootcov
 # C-statistic (apparent)
 # as.vector(M0$stats["C"])
@@ -1619,286 +2994,127 @@ res_C %>%
 ```
 
 
-# Decision curve analysis {.tabset .tabset-fade .tabset-pills}
-## Description
-We first describe the purpose of DCA for White Mold Prediction.
+#### Se, Sp, YI
+```{r LRII-model-estimate-optimism, eval=FALSE}
+# 1. Prepare predictions dataframe:
+lr_pred <-
+  data.frame(truth = X.sel$wm, response = pred)
 
-Decision curve analysis serves several important purposes when evaluating a logistic regression model; in this case, one designed to predict the presence of white mold in snap bean crops:
+# 2. Calculate apparent performance
+lr_apparent_perf <- calc_metrics_cutpointr(lr_pred)
 
-  - **Assessing Practical Utility**
+# 3. Bootstrap process
+fmla <- formula(paste("wm", "~", 
+                      paste(c("rms::rcs(t2m_mean_to_4dap, 3)",
+                              "rms::rcs(sm_40dap_to_49dap, 3)",
+                              "rms::rcs(stsm_35dap_to_44dap, 3)", 
+                              "rms::rcs(rain36to50dap, 3)"),
+                            collapse = "+")))
+
+
+lr_boot_fxn <- function(i) {
+  # Print the current iteration
+  cat("Currently processing iteration: ", i, "\n")
   
-DCA helps determine whether the white mold prediction model actually improves growers' decision-making compared to alternative strategies, such as always spraying or never spraying. This assessment is crucial because it directly relates to the model's real-world usefulness in snap bean cultivation.
-
-  - **Incorporating Spray Decision Consequences**
+  # a. Generate bootstrap sample
+  boot_sample <- rsample::bootstraps(X.sel, times = 1, strata = wm)$splits[[1]] %>%
+    rsample::analysis()
   
-DCA takes into account the potential outcomes of spraying decisions:
-
-  * Benefits: Correctly predicting and treating white mold, thus protecting the crop
-  * Harms: Unnecessary spraying (false positives) or failing to spray when needed (false negatives)
-  
-This analysis considers that unnecessary spraying wastes time, materials, and money, while failing to spray when needed could result in significant crop losses.
-
-  - **Comparing Prediction Strategies**
-  
-DCA allows comparison of:
-
-  * Different white mold prediction models
-  * The prediction model against a "spray all fields" or "spray no fields" approach
-  * The model against simple decision rules (e.g., spraying based on weather conditions alone)
-  
-This comparison helps identify which approach provides the highest net benefit across various decision thresholds.
-
-  - **Evaluating Across Grower Risk Tolerances**
-  
-DCA evaluates the model across a range of threshold probabilities for deciding to spray. This accounts for varying risk tolerances among growers. Some may prefer to spray at a lower probability of white mold to ensure crop protection, while others might tolerate higher risk to reduce unnecessary spraying.
-
-  - **Quantifying Net Benefit**
-  
-DCA quantifies the model's usefulness in terms of "net benefit," balancing the value of correctly predicting white mold against the cost of false predictions. This measure considers:
-
-  * The benefit of preventing white mold damage
-  * The cost of unnecessary spraying
-  * The potential loss from undetected white mold
-
-  - **Visualizing Impact on Spray Decisions**
-  
-The decision curve provides a visual representation of how the model impacts spray decisions across different probability thresholds. This allows growers and advisors to easily interpret where and to what extent the model improves decision-making.
-
-  - **Addressing Limitations of Traditional Metrics**
-  
-While traditional metrics like AUC might indicate good model performance, they don't directly translate to improved spray decisions. DCA complements these metrics by focusing on the model's practical impact on white mold management.
-
-To summarize, DCA provides a framework for evaluating the white mold prediction model that focuses on its potential to improve real-world spray decisions. This analysis helps determine whether the model should be adopted in snap bean cultivation practices, considering the balance between protecting crops and avoiding unnecessary chemical applications.
-
-
-<!-- Data setup for DCA -->
-```{r DCA-setup, dependson='prediction-data-and-model-prep', message=FALSE}
-# Need to do a couple more steps to get everything ready for DCA. 
-# Load the libraries needed for this section:
-library(dcurves)
-library(patchwork)
-library(rsample)
-
-# For dcurves package functions, convert the response (wm) to logical (Y) to avoid this message: `Assuming '1' is [Event] and '0' is [non-Event]`
-# We also add a new column called `field`, which is just an ID for each subject (observed field) in the dataset. This will be used in the bootstrap code for optimism.
-
-# NOTE: pred is defined in chunk `prediction-data-and-model-prep`
-
-X <- 
-  X %>% 
-  # Need the field column for bootstrap correction for optimism later:
-  tibble::rowid_to_column(var = "field") %>% 
-  dplyr::mutate(Y = as.logical(wm))
-
-X$pred <- pred
-
-# Model formula used in the bootstrap steps later:
-fmla <- as.formula("wm ~ rcs(t2m_mean_to_4dap, 3) + rcs(sm_40dap_to_49dap, 3) + rcs(rain36to50dap, 3)")
-```
-
-
-## Multivariable Decision Curve Analysis {.tabset .tabset-fade .tabset-pills}
-### Basic model
-The curve is a bit bumpy and sometimes even increases a bit, a result of statistical noise. Some researchers prefer to show a smoothed curve. 
-
-To do so, one can add a smoother. Note that different programs use different smoothers as there is no one smoother that is best in every situation. As such, results of a smoothed curve should always be compared with the unsmoothed curve to ensure that it gives a fair representation of the data.
-
-```{r DCA-Multivariable-Decision-Curve-Analysis, fig.cap='Decision curve showing the net benefit of using a model for forecasting white mold in snap bean. A: unsmoothed curve. B: with smoothing applied.'}
-p1 <-
-  dcurves::dca(Y ~ pred, data = X,
-               thresholds = seq(0, 0.5, 0.01),
-               label = list(pred = "Prediction Model")) %>%
-  plot(smooth = FALSE) +
-  geom_line(linewidth = 1.0)
-
-
-
-p2 <- 
-  dcurves::dca(Y ~ pred, data = X,
-               thresholds = seq(0, 0.5, 0.01),
-               label = list(pred = "Prediction Model")) %>%
-  plot(smooth = TRUE)
-
-
-# Comparing the smoothed and unsmoothed curves:
-p1 <- p1 + theme(legend.position = "none")
-p2 <- p2 + theme(legend.position = "bottom")
-
-p1/p2 +
-  plot_annotation(tag_levels = 'A')
-```
-
-
-### Correction for Overfit {.tabset .tabset-fade .tabset-pills}
-#### By bootstrap using `dcurves`
-
-<!-- Set up the bootstrap resampling -->
-```{r Correction-for-Overfit-by-bootstrap-setup}
-# set seed for random process
-set.seed(112358)
-
-dca_thresholds <- seq(0, 0.5, 0.01)
-
-# Do bootstrap resamples.
-bootstrap_samples <- rsample::bootstraps(X, times = 1000, strata = Y)
-
-suppressWarnings(
-df_boot_predictions <- 
-  bootstrap_samples %>% 
-  # Build logistic regression model on the bootstrap data
-  dplyr::rowwise() %>% 
-  dplyr::mutate(
-    # build regression model on analysis set:
-    glm_analysis =
-      rms::lrm(formula = fmla,
-               data = rsample::analysis(splits),
-               x = T, 
-               y = T) %>%
-      list(),
-    # get predictions on the original data:
-    df_assessment = 
-      tibble(field = X %>% 
-               dplyr::pull(field),
-             pred = predict(glm_analysis, 
-              newdata = X, 
-              type = "fitted.ind")
-             ) %>% 
-      list()
-    ) %>%
-  dplyr::ungroup() %>%
-  # pool results from the bootstraps
-  dplyr::pull(df_assessment) %>%
-  dplyr::bind_rows() %>% # Concatenate all bootstrap predictions
-  dplyr::group_by(field) %>%
-  # Generate mean prediction per field:
-  dplyr::summarise(boot_pred = mean(pred), .groups = "drop") %>% 
-  dplyr::ungroup()
-)
-
-df_boot_pred <-
-  X %>%
-  dplyr::left_join(
-    df_boot_predictions,
-    by = 'field'
+  # b. Fit model on bootstrap sample with error handling
+  boot_model <- tryCatch(
+    expr = {
+       rms::lrm(fmla, data = boot_sample, x = T, y = T)
+    },
+    error = function(e) {
+      cat("Error occurred in iteration", i, ":", e$message, "\n")
+      return(NULL) # Return NULL if an error occurs
+    }
   )
-```
-
-
-```{r Correction-for-Overfit-by-bootstrap-with-dcurves, fig.cap='Decision curve showing the net benefit of using a model for forecasting white mold in snap bean, corrected for over-optimism by bootstrap resampling.'}
-
-dcurves::dca( # calculate net benefit scores on mean bootstrap predictions
-  data = df_boot_pred,
-  formula = Y ~ boot_pred, 
-  thresholds = dca_thresholds,
-  label = list(
-    boot_pred = "Bootstrap Prediction Model"
-  ))$dca |> 
-  # Plot bootstrapped net benefit values:
-  ggplot(aes(x = threshold, y = net_benefit, color = label)) +
-  stat_smooth(method = "loess", se = FALSE, formula = "y ~ x", span = 0.2) +
-  coord_cartesian(ylim = c(-0.01, 0.21)) +
-  scale_x_continuous(labels = scales::percent_format(accuracy = 1)) +
-  ggthemes::scale_color_calc()+
-  labs(x = "Threshold Probability", y = "Net Benefit", color = "") +
-    cowplot::theme_half_open(font_size = 12) +
-  theme(legend.position = "bottom")
-ggsave("figs/decision_curve.png", dpi = 600, height = 4, width = 5, bg = "white")
-```
-
-
-#### By bootstrap using `pminternal`
-This is a different version of the net benefit plot corrected for optimism, in that the individual bootstrap estimated curves are shown. 
-```{r Correction-for-Overfit-by-bootstrap-with-pminternal, results='hide', fig.cap='Decision curve showing the net benefit of using a model for forecasting white mold in snap bean, corrected for over-optimism by bootstrap resampling. The individual bootstrapped net benefit curves are shown.'}
-# library(pminternal)
-# NOTES:
-# I am calling the validate function via :: to avoid loading pminternal, to avoid conflicts with other loaded packages. 
-# Another hiccup: pminternal could not find the rcs() function unless it was referenced explicitly as rms:rcs()
-
-M1 <- rms::lrm(wm ~ rms::rcs(t2m_mean_to_4dap, 3) + rms::rcs(sm_40dap_to_49dap, 3) + rms::rcs(rain36to50dap, 3), data = X.sel, x = T, y = T)
-
-tic()
-val <- pminternal::validate(fit = M1, method = "boot_optimism", B = 500, cores = 4)
-toc() # ~ 26.5 sec
-
-# Plotting the curves does take a while...
-tic()
-pminternal::dcurve_stability(val)
-toc()  # 66 sec
-```
-
-
-
-## Net Benefit Values
-We can save the net benefit for a decision curve for further analysis or presentation in a table. 
-
-At a threshold probability of 10%, the net benefit of the prediction model is 0.141. This means identifying 14.1 fields out of every 100, all of which had WM. This would be equivalent to a strategy where 14.1 fields per 100 were surveyed and all were found to have WM. 
-
-The plausible range of thresholds depends critically on context. For example, it may be unreasonable to not ask a grower to spray if the risk is greater than 40%.
-
-```{r DCA-Saving-out-Net-Benefit-Values}
-dcurves::dca(Y ~ pred, 
-             data = X,
-             thresholds = seq(0.1, 0.5, 0.1),
-             label = list(pred = "WM Model")) %>%
-  tibble::as_tibble() %>%
-  dplyr::select(label, threshold, net_benefit) %>%
-  gt::gt() %>%
-  gt::fmt_percent(columns = threshold, decimals = 0) %>%
-  gt::fmt(columns = net_benefit, fns = function(x) style_sigfig(x, digits = 3)) %>%
-  gt::cols_label(
-    label = "Strategy",
-    threshold = "Decision Threshold",
-    net_benefit = "Net Benefit"
-  ) %>%
-  gt::cols_align("left", columns = label)
-```
-
-
-## Interventions Avoided {.tabset .tabset-fade .tabset-pills}
-In many cases, the default strategy may be to intervene (i.e., spray all fields; think calendar-based models), and thus the aim of a model is to help reduce unnecessary interventions. With white mold in snap bean, because of the way risk management insurance contracts are written, growers are inclined to spray as a precaution, as the contracts stipulate that in the case of severe loss they must prove that they did everything that was in their power to have prevented the loss from occurring. 
-
-In contrast to the traditional method, where net benefit is calculated in terms of the net increase in true positives compared to no treatment, we can also calculate net benefit in terms of a net decrease in false positives compared to the “treat all” strategy. This seems more appropriate for the white mold situation, as white mold presence is the less frequent case (based on the observational data). 
-
-### Basic model
-
-```{r DCA-Interventions-Avoided, fig.cap='Net reduction in false positives when using a model for forecasting white mold in snap bean.'}
-dcurves::dca(Y ~ pred, 
-             data = X,
-             thresholds = seq(0.1, 0.5, 0.01),
-             label = list(pred = "Model")) %>%
-             net_intervention_avoided() %>%
-  plot(smooth = F) +
-  geom_line(linewidth = 1.0)
   
+  # If boot_model is NULL, skip this iteration
+  if (is.null(boot_model)) {
+    cat("Skipping iteration", i, "due to error.\n")
+    return(NULL)
+  }
+  
+  
+  # c. Calculate metrics on bootstrap sample (training performance)
+  suppressWarnings(boot_pred <- predict(boot_model, type = "fitted.ind"))
+  
+  boot_pred_df <- data.frame(truth = boot_sample$wm, response = boot_pred)
+  
+  train_perf <- calc_metrics_cutpointr(boot_pred_df)
+  
+  # d & e. Apply bootstrap model to original dataset and calculate metrics (test performance)
+  suppressWarnings(test_pred <- predict(boot_model, newdata = X.sel, type = "fitted.ind"))
+  
+  test_pred_df <- data.frame(truth = X.sel$wm, response = test_pred)
+  
+  test_perf <- calc_metrics_cutpointr(test_pred_df)
+  
+  # f. Calculate optimism
+  optimism <- purrr::map2_dbl(train_perf, test_perf, \(x, y) x-y)
+  
+  tibble(
+    iteration = i,
+    metric = names(train_perf),
+    train = unlist(train_perf),
+    test = unlist(test_perf),
+    optimism = optimism)
+  }
+
+
+# Run lr_boot_fxn in parallel:
+set.seed(5987)
+my.seeds <- c(1:5000)
+
+plan(list(tweak(multisession, workers = 5), sequential))
+tictoc::tic()
+bootstrap_results <- 
+  furrr::future_map(my.seeds, lr_boot_fxn, .options = furrr_options(seed = TRUE)) %>% 
+  purrr::list_rbind()
+tictoc::toc()  # 50 sec
+
+plan(sequential)
+
+
+# 4. Apparent performance bootstrap confidence intervals
+lr_apparent_CI <-
+  bootstrap_results %>%
+  dplyr::group_by(metric) %>%
+  dplyr::summarize(app_LCI = quantile(train, .025), app_UCI = quantile(train, .975))
+
+
+# 5. Average optimism across all bootstrap samples
+avg_optimism <- 
+  bootstrap_results %>%
+  dplyr::group_by(metric) %>%
+  dplyr::summarize(avg_optimism = mean(optimism))
+
+# 6. Calculate optimism-corrected performance
+lr_corrected_perf <- 
+  tibble(
+    metric = names(lr_apparent_perf),
+    apparent = unlist(lr_apparent_perf)
+    ) %>%
+  dplyr::left_join(lr_apparent_CI, by = "metric") %>%
+  dplyr::left_join(avg_optimism, by = "metric") %>%
+  dplyr::mutate(corrected = apparent - avg_optimism)
+
+
+# Save the results:
+save(lr_pred, lr_apparent_perf, bootstrap_results, lr_corrected_perf, file = here::here("Modeling", "LRIIoptimism.RData"))
 ```
 
 
-### Bootstrap correction
-```{r DCA-Interventions-Avoided-Bootstrap, fig.cap='Net reduction in false positives when using a model for forecasting white mold in snap bean, with bootstrap correction for overfitting.'}
-bar <- 
-dcurves::dca(
-  data = df_boot_pred,
-  formula = Y ~ boot_pred, 
-  thresholds = seq(0.1, 0.5, 0.01),
-  label = list(
-    boot_pred = "Bootstrap Prediction Model")) %>% 
-  net_intervention_avoided()
+```{r LRII-model-estimate-load-optimism-results}
+# lr_pred, lr_apparent_perf, bootstrap_results, lr_corrected_perf
+load(here::here("Modeling", "LRIIoptimism.RData"))  
 
-
-bar$dca |> 
-  # Plot bootstrapped interventions avoided values:
-  ggplot(aes(x = threshold, y = net_intervention_avoided, color = label)) +
-  # geom_line()
-  stat_smooth(method = "loess", se = FALSE, formula = "y ~ x", span = 0.2) +
-  coord_cartesian(ylim = c(-0.01, 0.6)) +
-  scale_x_continuous(labels = scales::percent_format(accuracy = 1)) +
-  labs(x = "Threshold Probability", y = "Net reduction in interventions", color = "") +
-  ggthemes::scale_color_calc()+
-  cowplot::theme_half_open(font_size = 12)+
-  theme(legend.position = "bottom")
-ggsave("figs/net_reduc_intervention.png", dpi = 600, height = 4, width = 5, bg = "white")
-
+lr_corrected_perf %>% 
+  make_kable()
 ```
+
 
 
 
