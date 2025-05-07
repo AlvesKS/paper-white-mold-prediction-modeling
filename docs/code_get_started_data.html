@@ -7,9 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Kaique Alves">
-<meta name="dcterms.date" content="2025-03-04">
 
-<title>Getting started – Data &amp; Codes</title>
+<title>Getting started – White mold prediction modeling</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -1705,7 +1704,7 @@ async function fuseSearch(query, fuse, fuseOptions) {
 </script>
 <meta name="quarto:offset" content="./">
 <link href="./code_weather_white-mold.html" rel="next">
-<link href="data:application/octet-stream;base64,LS0tDQp0aXRsZTogIlRoZSByZXBvc2l0b3J5Ig0KLS0tDQoNCiMjICoqU2FmZXIgYW5kIFNtYXJ0ZXI6IExldmVyYWdpbmcgVHJhbnNmZXIgTGVhcm5pbmcgYW5kIERhdGEgRnVzaW9uIG9mIERpc2Vhc2UgYW5kIEVudmlyb25tZW50YWwgRGF0YSBmb3IgTW9kZWxpbmcgUGxhbnQgRGlzZWFzZSBSaXNrKioNCg0KKipLYWlxdWUgUy4gQWx2ZXNeMSwyXjsgRGVuaXMgQS4gU2hhaF4zXjsgSGVsZW5lLiBSLiBEaWxsYXJkXjReOyBFbWVyc29uIE0uIERlbCBQb250ZV4xXjsgU2FyYWggSi4gUGV0aHlicmlkZ2VeMlwqXioqDQoNCj4gXioqMSoqXiBEZXBhcnRhbWVudG8gZGUgRml0b3BhdG9sb2dpYSwgVW5pdmVyc2lkYWRlIEZlZGVyYWwgZGUgVmnDp29zYSwgVmnDp29zYSwgTUcgMzY1NzAtOTAwLCBCcmF6aWwNCj4NCj4gXioqMioqXiBQbGFudCBQYXRob2xvZ3kgJiBQbGFudC1NaWNyb2JlIEJpb2xvZ3kgU2VjdGlvbiwgU2Nob29sIG9mIEludGVncmF0aXZlIFBsYW50IFNjaWVuY2UsIENvcm5lbGwgVW5pdmVyc2l0eSwgR2VuZXZhLCBOWSAxNDQ1NiwgVVNBDQo+DQo+IF4qKjMqKl4gRGVwYXJ0bWVudCBvZiBQbGFudCBQYXRob2xvZ3ksIEthbnNhcyBTdGF0ZSBVbml2ZXJzaXR5LCBNYW5oYXR0YW4sIEtTIDY2NTA2LCBVU0ENCj4NCj4gXioqNCoqXiBDb2xsZWdlIG9mIEFncmljdWx0dXJhbCBhbmQgRW52aXJvbm1lbnRhbCBTY2llbmNlcywgVW5pdmVyc2l0eSBvZiBDYWxpZm9ybmlhLCBEYXZpcywgQ0EgOTU2MTYsIFVTQQ0KPg0KPiBcKioqQ29ycmVzcG9uZGluZyBhdXRob3IqKjogU2FyYWguIEouIFBldGh5YnJpZGdlDQo+DQo+ICoqRW1haWwqKjogc2pwMjc3XEBjb3JuZWxsLmVkdQ0KDQojIyBTdW1tYXJ5DQoNCldlIGRldmVsb3BlZCBhIHdvcmtmbG93IGZvciBlbmhhbmNpbmcgc21hbGwgb2JzZXJ2YXRpb25hbCBkYXRhc2V0cyB0byBtb2RlbCBwbGFudCBkaXNlYXNlIHJpc2suIFVzaW5nIHdoaXRlIG1vbGQgaW4gc25hcCBiZWFucyBhcyBhIGNhc2Ugc3R1ZHksIHdlIGZ1c2VkIGdlb3JlZmVyZW5jZWQgZGlzZWFzZSBvYnNlcnZhdGlvbnMgd2l0aCBzb2lsIHZhcmlhYmxlcyBhbmQgZmVhdHVyZXMgZnJvbSBkb3duc2NhbGVkIHdlYXRoZXIgZGF0YS4gRnVuY3Rpb25hbCBkYXRhIGFuYWx5c2lzIGlkZW50aWZpZWQga2V5IHBlcmlvZHMgaW4gdGhlIHdlYXRoZXIgc2VyaWVzLCBhbmQgcmFuZG9tIGZvcmVzdHMgaGlnaGxpZ2h0ZWQgY3JpdGljYWwgcHJlZGljdG9ycywgd2hpY2ggd2VyZSB1c2VkIHRvIGJ1aWxkIGEgc2ltcGxlciBsb2dpc3RpYyByZWdyZXNzaW9uIG1vZGVsLiBUaGlzIGFwcHJvYWNoIGRlbW9uc3RyYXRlcyBob3cgbWFjaGluZSBsZWFybmluZyBjYW4gZ3VpZGUgdGhlIGRldmVsb3BtZW50IG9mIGNhbGlicmF0ZWQsIHByYWN0aWNhbCBtb2RlbHMsIGFkZHJlc3Npbmcgb3ZlcmZpdHRpbmcgYW5kIGFsaWduaW5nIGFuYWx5dGljYWwgY29tcGxleGl0eSB3aXRoIGRhdGFzZXQgc2l6ZS4NCg0KIyMgT3JpZ2luYWwgYXJ0aWNsZQ0KDQo6Ojogey5jYWxsb3V0LW5vdGUgYXBwZWFyYW5jZT0ic2ltcGxlIn0NCiMgVGhpcyBbcmVwb3NpdG9yeV0oaHR0cHM6Ly9vc2YuaW8vdjUzcHkvKXt0YXJnZXQ9Il9ibGFuayJ9IGNvbnRhaW5zIHRoZSBkYXRhIGFuZCBjb2RlIGZvciBvdXIgYXJ0aWNsZToNCg0KQWx2ZXMsIEsuUy4sIFNoYWgsIEQuQS4sIERpbGxhcmQsIEguUi4sIERlbCBQb250ZSwgRS5NLiwgUGV0aHlicmlkZ2UsIFMuSi4gKFlZWVkpIFNhZmVyIGFuZCBTbWFydGVyOiBMZXZlcmFnaW5nIFRyYW5zZmVyIExlYXJuaW5nIGFuZCBEYXRhIEZ1c2lvbiBvZiBEaXNlYXNlIGFuZCBFbnZpcm9ubWVudGFsIERhdGEgZm9yIE1vZGVsaW5nIFBsYW50IERpc2Vhc2UgUmlzay4gTmFtZSBvZiBqb3VybmFsL2Jvb2sgPGh0dHBzOi8vZG9pLm9yZy94eHgveHh4Pg0KOjo6DQoNCiMjIFJlYWQgdGhlIFByZXByaW50DQoNCjo6OiB7LmNhbGxvdXQtbm90ZSBhcHBlYXJhbmNlPSJzaW1wbGUifQ0KIyBPdXIgcHJlLXByaW50IGlzIG9ubGluZSBvbiB0aGUgT1NGIHByZXByaW50IHNlcnZlcjoNCg0KQWx2ZXMsIEsuUy4sIFNoYWgsIEQuQS4sIERpbGxhcmQsIEguUi4sIERlbCBQb250ZSwgRS5NLiwgUGV0aHlicmlkZ2UsIFMuSi4gKFlZWVkpIFNhZmVyIGFuZCBTbWFydGVyOiBMZXZlcmFnaW5nIFRyYW5zZmVyIExlYXJuaW5nIGFuZCBEYXRhIEZ1c2lvbiBvZiBEaXNlYXNlIGFuZCBFbnZpcm9ubWVudGFsIERhdGEgZm9yIE1vZGVsaW5nIFBsYW50IERpc2Vhc2UgUmlzay4gT25saW5lIGF0IDxkb2kub3JnLzEwLjMxMjE5L29zZi5pby85dGdhdT4NCjo6Og0KDQojIyBSZXNlYXJjaCBjb21wZW5kaXVtDQoNCjo6OiB7LmNhbGxvdXQtbm90ZSBhcHBlYXJhbmNlPSJzaW1wbGUifQ0KIyMgUGxlYXNlIGNpdGUgdGhpcyByZXNlYXJjaCBjb21wZW5kaXVtIGFzOg0KDQpBbHZlcywgSy4gUy4sIFNoYWgsIEQuIEEuLCBEaWxsYXJkLCBILiBSLiwgRGVsIFBvbnRlLCBFLiBNLiwgJiBQZXRoeWJyaWRnZSwgUy4gSi4gKDIwMjIsIEF1Z3VzdCAzKS4gUmVzZWFyY2ggQ29tcGVuZGl1bTogU2FmZXIgYW5kIFNtYXJ0ZXI6IExldmVyYWdpbmcgVHJhbnNmZXIgTGVhcm5pbmcgYW5kIERhdGEgRnVzaW9uIG9mIERpc2Vhc2UgYW5kIEVudmlyb25tZW50YWwgRGF0YSBmb3IgTW9kZWxpbmcgUGxhbnQgRGlzZWFzZSBSaXNrLiBodHRwczovL2RvaS5vcmcvMTAuMTc2MDUvT1NGLklPL1Y1M1BZDQo6OjoNCg==" rel="prev">
+<link href="data:application/octet-stream;base64,LS0tDQp0aXRsZTogIlRoZSByZXBvc2l0b3J5Ig0KLS0tDQoNCmgzKCoqU2FmZXIgYW5kIFNtYXJ0ZXI6IExldmVyYWdpbmcgSW50ZXJwcmV0YXRpb24tR3VpZGVkIE1vZGVsaW5nIGFuZCBEYXRhIE1lcmdpbmcgb2YgRGlzZWFzZSBhbmQgRW52aXJvbm1lbnRhbCBEYXRhIGZvciBQbGFudCBEaXNlYXNlIFJpc2sgUHJlZGljdGlvbioqKQ0KDQoqKkthaXF1ZSBTLiBBbHZlc14xLDJeOyBEZW5pcyBBLiBTaGFoXjNeOyBIZWxlbmUuIFIuIERpbGxhcmReNF47IEVtZXJzb24gTS4gRGVsIFBvbnRlXjFeOyBTYXJhaCBKLiBQZXRoeWJyaWRnZV4yXCpeKioNCg0KPiBeKioxKipeIERlcGFydGFtZW50byBkZSBGaXRvcGF0b2xvZ2lhLCBVbml2ZXJzaWRhZGUgRmVkZXJhbCBkZSBWacOnb3NhLCBWacOnb3NhLCBNRyAzNjU3MC05MDAsIEJyYXppbA0KPg0KPiBeKioyKipeIFBsYW50IFBhdGhvbG9neSAmIFBsYW50LU1pY3JvYmUgQmlvbG9neSBTZWN0aW9uLCBTY2hvb2wgb2YgSW50ZWdyYXRpdmUgUGxhbnQgU2NpZW5jZSwgQ29ybmVsbCBVbml2ZXJzaXR5LCBHZW5ldmEsIE5ZIDE0NDU2LCBVU0ENCj4NCj4gXioqMyoqXiBEZXBhcnRtZW50IG9mIFBsYW50IFBhdGhvbG9neSwgS2Fuc2FzIFN0YXRlIFVuaXZlcnNpdHksIE1hbmhhdHRhbiwgS1MgNjY1MDYsIFVTQQ0KPg0KPiBeKio0KipeIENvbGxlZ2Ugb2YgQWdyaWN1bHR1cmFsIGFuZCBFbnZpcm9ubWVudGFsIFNjaWVuY2VzLCBVbml2ZXJzaXR5IG9mIENhbGlmb3JuaWEsIERhdmlzLCBDQSA5NTYxNiwgVVNBDQo+DQo+IFwqKipDb3JyZXNwb25kaW5nIGF1dGhvcioqOiBTYXJhaC4gSi4gUGV0aHlicmlkZ2UNCj4NCj4gKipFbWFpbCoqOiBzanAyNzdcQGNvcm5lbGwuZWR1DQoNCiMjIFN1bW1hcnkNCg0KV2UgZGV2ZWxvcGVkIGEgd29ya2Zsb3cgZm9yIGVuaGFuY2luZyBzbWFsbCBvYnNlcnZhdGlvbmFsIGRhdGFzZXRzIHRvIG1vZGVsIHBsYW50IGRpc2Vhc2Ugcmlzay4gVXNpbmcgd2hpdGUgbW9sZCBpbiBzbmFwIGJlYW5zIGFzIGEgY2FzZSBzdHVkeSwgd2UgZnVzZWQgZ2VvcmVmZXJlbmNlZCBkaXNlYXNlIG9ic2VydmF0aW9ucyB3aXRoIHNvaWwgdmFyaWFibGVzIGFuZCBmZWF0dXJlcyBmcm9tIGRvd25zY2FsZWQgd2VhdGhlciBkYXRhLiBGdW5jdGlvbmFsIGRhdGEgYW5hbHlzaXMgaWRlbnRpZmllZCBrZXkgcGVyaW9kcyBpbiB0aGUgd2VhdGhlciBzZXJpZXMsIGFuZCByYW5kb20gZm9yZXN0cyBoaWdobGlnaHRlZCBjcml0aWNhbCBwcmVkaWN0b3JzLCB3aGljaCB3ZXJlIHVzZWQgdG8gYnVpbGQgYSBzaW1wbGVyIGxvZ2lzdGljIHJlZ3Jlc3Npb24gbW9kZWwuIFRoaXMgYXBwcm9hY2ggZGVtb25zdHJhdGVzIGhvdyBtYWNoaW5lIGxlYXJuaW5nIGNhbiBndWlkZSB0aGUgZGV2ZWxvcG1lbnQgb2YgY2FsaWJyYXRlZCwgcHJhY3RpY2FsIG1vZGVscywgYWRkcmVzc2luZyBvdmVyZml0dGluZyBhbmQgYWxpZ25pbmcgYW5hbHl0aWNhbCBjb21wbGV4aXR5IHdpdGggZGF0YXNldCBzaXplLg0KDQojIyBPcmlnaW5hbCBhcnRpY2xlDQoNCjo6OiB7LmNhbGxvdXQtbm90ZSBhcHBlYXJhbmNlPSJzaW1wbGUifQ0KIyBUaGlzIFtyZXBvc2l0b3J5XShodHRwczovL29zZi5pby92NTNweS8pe3RhcmdldD0iX2JsYW5rIn0gY29udGFpbnMgdGhlIGRhdGEgYW5kIGNvZGUgZm9yIG91ciBhcnRpY2xlOg0KDQpBbHZlcywgSy5TLiwgU2hhaCwgRC5BLiwgRGlsbGFyZCwgSC5SLiwgRGVsIFBvbnRlLCBFLk0uLCBQZXRoeWJyaWRnZSwgUy5KLiAoWVlZWSkgU2FmZXIgYW5kIFNtYXJ0ZXI6IExldmVyYWdpbmcgSW50ZXJwcmV0YXRpb24tR3VpZGVkIE1vZGVsaW5nIGFuZCBEYXRhIE1lcmdpbmcgb2YgRGlzZWFzZSBhbmQgRW52aXJvbm1lbnRhbCBEYXRhIGZvciBQbGFudCBEaXNlYXNlIFJpc2sgUHJlZGljdGlvbi4gTmFtZSBvZiBqb3VybmFsL2Jvb2sgPGh0dHBzOi8vZG9pLm9yZy94eHgveHh4Pg0KOjo6DQoNCiMjIFJlYWQgdGhlIFByZXByaW50DQoNCjo6OiB7LmNhbGxvdXQtbm90ZSBhcHBlYXJhbmNlPSJzaW1wbGUifQ0KIyBPdXIgcHJlLXByaW50IGlzIG9ubGluZSBvbiB0aGUgT1NGIHByZXByaW50IHNlcnZlcjoNCg0KQWx2ZXMsIEsuUy4sIFNoYWgsIEQuQS4sIERpbGxhcmQsIEguUi4sIERlbCBQb250ZSwgRS5NLiwgUGV0aHlicmlkZ2UsIFMuSi4gKFlZWVkpIFNhZmVyIGFuZCBTbWFydGVyOiBMZXZlcmFnaW5nIEludGVycHJldGF0aW9uLUd1aWRlZCBNb2RlbGluZyBhbmQgRGF0YSBNZXJnaW5nIG9mIERpc2Vhc2UgYW5kIEVudmlyb25tZW50YWwgRGF0YSBmb3IgUGxhbnQgRGlzZWFzZSBSaXNrIFByZWRpY3Rpb24uIE9ubGluZSBhdCA8ZG9pLm9yZy8xMC4zMTIxOS9vc2YuaW8vOXRnYXU+DQo6OjoNCg0KIyMgUmVzZWFyY2ggY29tcGVuZGl1bQ0KDQo6Ojogey5jYWxsb3V0LW5vdGUgYXBwZWFyYW5jZT0ic2ltcGxlIn0NCiMjIFBsZWFzZSBjaXRlIHRoaXMgcmVzZWFyY2ggY29tcGVuZGl1bSBhczoNCg0KQWx2ZXMsIEsuIFMuLCBTaGFoLCBELiBBLiwgRGlsbGFyZCwgSC4gUi4sIERlbCBQb250ZSwgRS4gTS4sICYgUGV0aHlicmlkZ2UsIFMuIEouICgyMDIyLCBBdWd1c3QgMykuIFNhZmVyIGFuZCBTbWFydGVyOiBMZXZlcmFnaW5nIEludGVycHJldGF0aW9uLUd1aWRlZCBNb2RlbGluZyBhbmQgRGF0YSBNZXJnaW5nIG9mIERpc2Vhc2UgYW5kIEVudmlyb25tZW50YWwgRGF0YSBmb3IgUGxhbnQgRGlzZWFzZSBSaXNrIFByZWRpY3Rpb24uIGh0dHBzOi8vZG9pLm9yZy8xMC4xNzYwNS9PU0YuSU8vVjUzUFkNCjo6Og0K" rel="prev">
 <script>const sectionChanged = new CustomEvent("quarto-sectionChanged", {
   detail: {},
   bubbles: true,
@@ -4751,9 +4750,9 @@ vertical-align: -.125em;
 
 <style type="text/css">
 </style>
-<meta property="og:title" content="Getting started – Data &amp; Codes">
+<meta property="og:title" content="Getting started – White mold prediction modeling">
 <meta property="og:description" content="Downloading data">
-<meta property="og:site_name" content="Data &amp; Codes">
+<meta property="og:site_name" content="White mold prediction modeling">
 </head>
 
 <body class="nav-sidebar floating">
@@ -4780,10 +4779,10 @@ vertical-align: -.125em;
   <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
     <div class="pt-lg-2 mt-2 text-left sidebar-header">
     <div class="sidebar-title mb-0 py-0">
-      <a href="./">Data &amp; Codes</a> 
+      <a href="./">White mold prediction modeling</a> 
         <div class="sidebar-tools-main tools-wide">
-    <a href="https://twitter.com/AlvesKS_" title class="quarto-navigation-tool px-1" aria-label><i class="bi bi-linkedin"></i></a>
-    <a href="https://github.com/AlvesKS/paper_ML_whitemold" title class="quarto-navigation-tool px-1" aria-label><i class="bi bi-github"></i></a>
+    <a href="https://www.linkedin.com/in/kaique-alves-ab253436/" title class="quarto-navigation-tool px-1" aria-label><i class="bi bi-linkedin"></i></a>
+    <a href="https://github.com/AlvesKS/paper-white-mold-prediction-modeling" title class="quarto-navigation-tool px-1" aria-label><i class="bi bi-github"></i></a>
     <a href="https://osf.io/v53py/" title class="quarto-navigation-tool px-1" aria-label><i class="bi bi-download"></i></a>
   <a href class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Toggle dark mode"><i class="bi"></i></a>
 </div>
@@ -4849,7 +4848,7 @@ vertical-align: -.125em;
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./code_data_fusion.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">Fuse the white mold datasets</span></a>
+ <span class="menu-text">Merge the white mold datasets</span></a>
   </div>
 </li>
       </ul>
@@ -4913,7 +4912,7 @@ vertical-align: -.125em;
   </ul></li>
   <li><a href="#session-info" id="toc-session-info" class="nav-link" data-scroll-target="#session-info">Session Info</a></li>
   </ul>
-<div class="toc-actions"><ul><li><a href="https://github.com/AlvesKS/paper-white-mold-transfer-learning/edit/main/code_get_started_data.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/AlvesKS/paper-white-mold-transfer-learning/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+<div class="toc-actions"><ul><li><a href="https://github.com/AlvesKS/paper-white-mold-prediction-modeling/edit/main/code_get_started_data.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/AlvesKS/paper-white-mold-prediction-modeling/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
@@ -4938,7 +4937,7 @@ vertical-align: -.125em;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">March 4, 2025</p>
+      <p class="date">Invalid Date</p>
     </div>
   </div>
   
@@ -4961,21 +4960,21 @@ vertical-align: -.125em;
 <h3 class="anchored" data-anchor-id="disease-data">Disease data</h3>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">download.file</span>(<span class="st">&quot;https://osf.io/download/ehy26/&quot;</span>, <span class="at">destfile =</span> <span class="st">&quot;data_white-mold.zip&quot;</span>, <span class="at">mode =</span> <span class="st">&quot;wb&quot;</span>)</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span>(<span class="st">&quot;data_white-mold.zip&quot;</span>, <span class="at">list =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span>(<span class="st">&quot;data_white-mold.zip&quot;</span>, <span class="at">list =</span> <span class="cn">FALSE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="weather-data" class="level3">
 <h3 class="anchored" data-anchor-id="weather-data">Weather data</h3>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">download.file</span>(<span class="st">&quot;https://osf.io/download/k39bd/&quot;</span>, <span class="at">destfile =</span> <span class="st">&quot;data_era5.zip&quot;</span>, <span class="at">mode =</span> <span class="st">&quot;wb&quot;</span>)</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span>(<span class="st">&quot;data_era5.zip&quot;</span>, <span class="at">list =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span>(<span class="st">&quot;data_era5.zip&quot;</span>, <span class="at">list =</span> <span class="cn">FALSE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="soil-data" class="level3">
 <h3 class="anchored" data-anchor-id="soil-data">Soil data</h3>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">download.file</span>(<span class="st">&quot;https://osf.io/download/2jfcz/&quot;</span>, <span class="at">destfile =</span> <span class="st">&quot;soil_images.zip&quot;</span>, <span class="at">mode =</span> <span class="st">&quot;wb&quot;</span>)</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span>(<span class="st">&quot;soil_images.zip&quot;</span>, <span class="at">list =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span>(<span class="st">&quot;soil_images.zip&quot;</span>, <span class="at">list =</span> <span class="cn">FALSE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 </section>
@@ -5595,7 +5594,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
     </div>   
     <div class="nav-footer-center">
 <p>Copyright © 2024 Kaique S. Alves</p>
-<div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/AlvesKS/paper-white-mold-transfer-learning/edit/main/code_get_started_data.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/AlvesKS/paper-white-mold-transfer-learning/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div>
+<div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/AlvesKS/paper-white-mold-prediction-modeling/edit/main/code_get_started_data.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/AlvesKS/paper-white-mold-prediction-modeling/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div>
     <div class="nav-footer-right">
        
     </div>
