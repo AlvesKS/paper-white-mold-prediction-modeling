@@ -2,7 +2,7 @@
 title: "Models for white mold"
 subtitle: "With the goals of interpretation and prediction"
 author: "Denis Shah"
-date: "`r format(Sys.time(), '%d %B, %Y')`"
+date: "{{< meta date >}}"
 ---
 
 
@@ -11,6 +11,7 @@ options(digits = 3)
 require(knitr)
 ## options
 knitr::opts_chunk$set(eval = TRUE, echo = T, cache = T)
+date <- format(Sys.Date(), "%d %B, %Y")
 ```
 
 ## Packages 
