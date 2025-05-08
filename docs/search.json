@@ -499,7 +499,7 @@
     "href": "index.html#downloading-the-codes-repository",
     "title": "About this Study and Repository",
     "section": "Downloading the codes repository",
-    "text": "Downloading the codes repository\nTo Download the codes and run the analysis in your machine, please click here. This will download a .zip file. You should unzip it before runing the codes.\n\nCloning\nTo clone the repository, you’ll need Git installed on your system. Then, simply open your terminal (or command prompt on Windows) and run the following command:\n\ngit clone https://github.com/AlvesKS/paper-white-mold-transfer-learning.git",
+    "text": "Downloading the codes repository\nTo Download the codes and run the analysis in your machine, please click here. This will download a .zip file. You should unzip it before runing the codes.\n\nCloning\nTo clone the repository, you’ll need Git installed on your system. Then, simply open your terminal (or command prompt on Windows) and run the following command:\n\ngit clone https://github.com/AlvesKS/paper-white-mold-prediction-modeling.git",
     "crumbs": [
       "Repository",
       "About this Study and Repository"
@@ -521,7 +521,7 @@
     "href": "index.html#research-compendium",
     "title": "About this Study and Repository",
     "section": "Research compendium",
-    "text": "Research compendium\n\n\n\n\n\n\nPlease cite this research compendium as:\n\n\n\nAlves, K. S., Shah, D. A., Dillard, H. R., Del Ponte, E. M., & Pethybridge, S. J. (2022, August 3). Research Compendium: Safer and Smarter: Leveraging Transfer Learning and Data Fusion of Disease and Environmental Data for Modeling Plant Disease Risk. https://doi.org/10.17605/OSF.IO/V53PY",
+    "text": "Research compendium\n\n\n\n\n\n\nPlease cite this research compendium as:\n\n\n\nAlves, K. S., Shah, D. A., Dillard, H. R., Del Ponte, E. M., & Pethybridge, S. J. (2022, August 3). Research Compendium: Safer and Smarter: Leveraging Interpretation-Guided Modeling and Data Merging of Disease and Environmental Data for Plant Disease Risk Prediction. https://doi.org/10.17605/OSF.IO/V53PY",
     "crumbs": [
       "Repository",
       "About this Study and Repository"
@@ -532,7 +532,7 @@
     "href": "index.html#original-article",
     "title": "About this Study and Repository",
     "section": "Original article",
-    "text": "Original article\n\n\n\n\n\n\nThis repository contains the data and code for our article:\n\n\n\nAlves, K.S., Shah, D.A., Dillard, H.R., Del Ponte, E.M., Pethybridge, S.J. (YYYY) Safer and Smarter: Leveraging Transfer Learning and Data Fusion of Disease and Environmental Data for Modeling Plant Disease Risk. Name of journal/book https://doi.org/xxx/xxx",
+    "text": "Original article\n\n\n\n\n\n\nThis repository contains the data and code for our article:\n\n\n\nAlves, K.S., Shah, D.A., Dillard, H.R., Del Ponte, E.M., Pethybridge, S.J. (YYYY) Safer and Smarter: Leveraging Interpretation-Guided Modeling and Data Merging of Disease and Environmental Data for Plant Disease Risk Prediction. Name of journal/book https://doi.org/xxx/xxx",
     "crumbs": [
       "Repository",
       "About this Study and Repository"
@@ -543,7 +543,7 @@
     "href": "index.html#read-the-preprint",
     "title": "About this Study and Repository",
     "section": "Read the Preprint",
-    "text": "Read the Preprint\n\n\n\n\n\n\nOur pre-print is online on the OSF preprint server:\n\n\n\nAlves, K.S., Shah, D.A., Dillard, H.R., Del Ponte, E.M., Pethybridge, S.J. (YYYY) Safer and Smarter: Leveraging Transfer Learning and Data Fusion of Disease and Environmental Data for Modeling Plant Disease Risk. Online at &lt;doi.org/10.31219/osf.io/9tgau&gt;",
+    "text": "Read the Preprint\n\n\n\n\n\n\nOur pre-print is online on the OSF preprint server:\n\n\n\nAlves, K.S., Shah, D.A., Dillard, H.R., Del Ponte, E.M., Pethybridge, S.J. (2024) Safer and Smarter: Leveraging Interpretation-Guided Modeling and Data Merging of Disease and Environmental Data for Plant Disease Risk Prediction. Online at https://doi.org/10.31219/osf.io/9tgau",
     "crumbs": [
       "Repository",
       "About this Study and Repository"
